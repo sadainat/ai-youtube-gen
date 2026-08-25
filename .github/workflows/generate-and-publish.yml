@@ -51,7 +51,7 @@ jobs:
           ARABIC_VOICE: ar-SA-HamedNeural
         run: |
           test -n "$GOOGLE_API_KEY" || { echo "GOOGLE_API_KEY is not configured"; exit 1; }
-          test -n "$PEXELS_API_KEY" || { echo "PEXELS_API_KEY is not configured"; exit 1; }
+          echo "PEXELS_API_KEY is optional; fallback visuals will be used if it is unavailable."
           test -n "$FACEBOOK_PAGE_ID" || { echo "FACEBOOK_PAGE_ID is not configured"; exit 1; }
           test -n "$FACEBOOK_PAGE_ACCESS_TOKEN" || { echo "FACEBOOK_PAGE_ACCESS_TOKEN is not configured"; exit 1; }
           set -o pipefail
