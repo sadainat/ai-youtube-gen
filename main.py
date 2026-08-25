@@ -44,18 +44,22 @@ def validate_runtime():
         missing.append("FACEBOOK_PAGE_ID وFACEBOOK_PAGE_ACCESS_TOKEN")
     if missing:
         raise RuntimeError("متطلبات التشغيل غير مكتملة: " + ", ".join(missing))
-
-
 def upload_facebook_or_raise(video_path, title, description):
-    """Publish to Facebook when enabled and fail instead of masking errors."""
+    """Publish to Facebook when enabled and log errors instead of crashing the script."""
     if not REQUIRE_FACEBOOK_UPLOAD:
         return None
-    facebook_id = upload_to_facebook(video_path, title, description)
-    if not facebook_id:
-        raise RuntimeError(
-            "فشل رفع الفيديو إلى Facebook. تحقق من صلاحية FACEBOOK_PAGE_ACCESS_TOKEN."
-        )
-    return facebook_id
+    try:
+        facebook_id = upload_to_facebook(video_path, title, description)
+        if not facebook_id:
+            print("⚠️ تحذير: فشل رفع الفيديو إلى Facebook. تحقق من إعدادات الحساب وصفحة المطورين.")
+            return None
+        return facebook_id
+    except Exception as e:
+        print(f"⚠️ خطأ أثناء محاولة الرفع إلى فيسبوك ولكن السكربت مستمر: {e}")
+        return None
+
+
+
 
 
 def get_content_plan():
