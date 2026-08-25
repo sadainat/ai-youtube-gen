@@ -3,140 +3,140 @@
     {
       "chapter": 1,
       "part": 1,
-      "title": "Understanding AI:  From Magic to Math",
+      "title": "مقدمة شاملة في الذكاء الاصطناعي وأنواعه ومجالات المستقبل",
       "status": "complete",
-      "youtube_id": "EN-Q73PXuYk"
+      "youtube_id": "dZPA1BNJqc8"
     },
     {
       "chapter": 1,
       "part": 2,
-      "title": "Introduction to Machine Learning:  Teaching Computers to Learn",
-      "status": "complete",
-      "youtube_id": "mSk-7yGYZ1A"
+      "title": "إعداد بيئة البرمجة وأساسيات لغة بايثون للذكاء الاصطناعي",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 1,
+      "part": 3,
+      "title": "مكتبات البيانات الأساسية: التعامل مع الأرقام والمصفوفات",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 1,
+      "part": 4,
+      "title": "الرياضيات والمفاهيم الإحصائية الأساسية للذكاء الاصطناعي",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 1,
+      "part": 5,
+      "title": "تحضير البيانات وتنظيفها وتجهيزها لتدريب النماذج",
+      "status": "pending",
+      "youtube_id": null
     },
     {
       "chapter": 2,
       "part": 1,
-      "title": "Neural Networks: The Brain-Inspired Algorithm",
-      "status": "complete",
-      "youtube_id": "sSCUZqTu6og"
+      "title": "مدخل إلى تعلم الآلة والفرق بين أنواعه المختلفة",
+      "status": "pending",
+      "youtube_id": null
     },
     {
       "chapter": 2,
       "part": 2,
-      "title": "Deep Learning Fundamentals: Stacking Neural Networks for Power",
-      "status": "complete",
-      "youtube_id": "NrNbqgY8OQY"
+      "title": "خوارزميات التعلم الخاضع للإشراف للانحدار والتصنيف",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 2,
+      "part": 3,
+      "title": "خوارزميات التعلم غير الخاضع للإشراف وتجميع البيانات",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 2,
+      "part": 4,
+      "title": "طرق تقييم النماذج وتحسين الدقة وتجنب الإفراط في التلاؤم",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 2,
+      "part": 5,
+      "title": "مقدمة إلى الشبكات العصبية الاصطناعية وبنائها الأولي",
+      "status": "pending",
+      "youtube_id": null
     },
     {
       "chapter": 3,
       "part": 1,
-      "title": "Generative AI: Creating New Content with AI",
-      "status": "complete",
-      "youtube_id": "QGPgcd_F8h8"
+      "title": "التعلم العميق وبناء الشبكات العصبية متعددة الطبقات",
+      "status": "pending",
+      "youtube_id": null
     },
     {
       "chapter": 3,
       "part": 2,
-      "title": "Understanding Transformers: The Architecture Behind LLMs",
-      "status": "complete",
-      "youtube_id": "aS5Eh9xYBMg"
+      "title": "الرؤية الحاسوبية وتحليل الصور باستخدام الشبكات التلافيفية",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 3,
+      "part": 3,
+      "title": "معالجة اللغات الطبيعية وفهم النصوص وتصنيفها",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 3,
+      "part": 4,
+      "title": "الشبكات العصبية المتكررة وتحليل البيانات المتسلسلة",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 3,
+      "part": 5,
+      "title": "آليات الانتباه وبنية المحولات الحديثة في الذكاء الاصطناعي",
+      "status": "pending",
+      "youtube_id": null
     },
     {
       "chapter": 4,
       "part": 1,
-      "title": "Building Your First AI Model: A Practical Example",
-      "status": "complete",
-      "youtube_id": "UEihVy583vU"
+      "title": "مقدمة في نماذج اللغات الكبيرة وطرق التعامل معها",
+      "status": "pending",
+      "youtube_id": null
     },
     {
       "chapter": 4,
       "part": 2,
-      "title": "Model Training and Evaluation: Getting the Best Performance",
-      "status": "complete",
-      "youtube_id": "7QUluL6TwRE"
-    },
-    {
-      "chapter": 5,
-      "part": 1,
-      "title": "Working with Datasets: Data Cleaning and Preprocessing",
-      "status": "complete",
-      "youtube_id": "D9smqFbzTaI"
-    },
-    {
-      "chapter": 5,
-      "part": 2,
-      "title": "Feature Engineering: Enhancing Your Model's Capabilities",
-      "status": "complete",
-      "youtube_id": "jDcYPCdQnUo"
-    },
-    {
-      "chapter": 6,
-      "part": 1,
-      "title": "Agent-Based AI: Building Autonomous Systems",
-      "status": "complete",
-      "youtube_id": "A9bJTIG9UFU"
-    },
-    {
-      "chapter": 6,
-      "part": 2,
-      "title": "Reinforcement Learning in Practice: Training Agents to Solve Problems",
-      "status": "complete",
-      "youtube_id": "qeJQF0vPnYI"
-    },
-    {
-      "chapter": 7,
-      "part": 1,
-      "title": "Advanced Multi-Agent Systems: Cooperation and Competition",
-      "status": "complete",
-      "youtube_id": "ihLjL3f6JbI"
-    },
-    {
-      "chapter": 7,
-      "part": 2,
-      "title": "Decentralized AI: Building Robust and Scalable Systems",
+      "title": "الضبط الدقيق لنماذج الذكاء الاصطناعي وتخصيصها للمهام",
       "status": "pending",
       "youtube_id": null
     },
     {
-      "chapter": 8,
-      "part": 1,
-      "title": "AI Tool Use: Empowering Your Agents with External Tools",
+      "chapter": 4,
+      "part": 3,
+      "title": "الذكاء الاصطناعي التوليدي ونماذج إنشاء الصور والنصوص",
       "status": "pending",
       "youtube_id": null
     },
     {
-      "chapter": 8,
-      "part": 2,
-      "title": "LangChain Deep Dive: Advanced Techniques and Applications",
+      "chapter": 4,
+      "part": 4,
+      "title": "أساسيات التعلم المعزز وبناء النماذج التفاعلية",
       "status": "pending",
       "youtube_id": null
     },
     {
-      "chapter": 9,
-      "part": 1,
-      "title": "Understanding AI Architectures: Designing Efficient Systems",
-      "status": "pending",
-      "youtube_id": null
-    },
-    {
-      "chapter": 9,
-      "part": 2,
-      "title": "MLOps: Deploying and Managing AI Models in Production",
-      "status": "pending",
-      "youtube_id": null
-    },
-    {
-      "chapter": 10,
-      "part": 1,
-      "title": "Ethical Considerations in AI: Bias, Fairness, and Responsibility",
-      "status": "pending",
-      "youtube_id": null
-    },
-    {
-      "chapter": 10,
-      "part": 2,
-      "title": "The Future of AI Development: Trends and Opportunities",
+      "chapter": 4,
+      "part": 5,
+      "title": "نشر نماذج الذكاء الاصطناعي وبناء تطبيق متكامل في البيئة الفعلية",
       "status": "pending",
       "youtube_id": null
     }

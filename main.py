@@ -9,13 +9,15 @@ from src.generator import (
     generate_lesson_content,
     text_to_speech,
     generate_visuals,
+    get_pexels_video,
     create_video,
     YOUR_NAME
 )
-from src.uploader import upload_to_youtube
+from src.uploader import upload_to_facebook, upload_to_youtube
 
 CONTENT_PLAN_FILE = Path("content_plan.json")
 OUTPUT_DIR = Path("output")
+CONTENT_OUTPUT_DIR = OUTPUT_DIR / "content"
 LESSONS_PER_RUN = 1
 
 def get_content_plan():
@@ -23,7 +25,7 @@ def get_content_plan():
         print("📄 content_plan.json not found. Generating new plan...")
         new_plan = generate_curriculum()
         with open(CONTENT_PLAN_FILE, 'w') as f:
-            json.dump(new_plan, f, indent=2)
+            json.dump(new_plan, f, ensure_ascii=False, indent=2)
         print(f"✅ New curriculum saved to {CONTENT_PLAN_FILE}")
         return new_plan
     else:
@@ -37,13 +39,33 @@ def get_content_plan():
             print(f"❌ ERROR loading existing plan: {e}. Regenerating...")
             new_plan = generate_curriculum()
             with open(CONTENT_PLAN_FILE, 'w') as f:
-                json.dump(new_plan, f, indent=2)
+                json.dump(new_plan, f, ensure_ascii=False, indent=2)
             return new_plan
 
 
 def update_content_plan(plan):
     with open(CONTENT_PLAN_FILE, 'w') as f:
-        json.dump(plan, f, indent=2)
+        json.dump(plan, f, ensure_ascii=False, indent=2)
+
+
+def save_lesson_content(lesson, lesson_content):
+    CONTENT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    content_file = CONTENT_OUTPUT_DIR / f"lesson_{lesson['chapter']}_{lesson['part']}.json"
+    content_file.write_text(
+        json.dumps(
+            {
+                "chapter": lesson["chapter"],
+                "part": lesson["part"],
+                "title": lesson["title"],
+                "content": lesson_content,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    print(f"📝 Arabic lesson content saved to: {content_file}")
+    return content_file
 
 
 
@@ -51,18 +73,20 @@ def produce_lesson_videos(lesson):
     print(f"\n▶️ Starting production for Lesson: '{lesson['title']}'")
     unique_id = f"{datetime.datetime.now().strftime('%Y%m%d')}_{lesson['chapter']}_{lesson['part']}"
 
+    print("\n--- Creating Arabic Lesson Content ---")
     lesson_content = generate_lesson_content(lesson['title'])
+    save_lesson_content(lesson, lesson_content)
 
     print("\n--- Producing Long-Form Video ---")
 
-    intro_slide = {"title": lesson['title'], "content": f"Chapter {lesson['chapter']} | Part {lesson['part']}"}
-    outro_slide = {"title": "Thanks for Watching!", "content": "Like, Share & Subscribe for more daily AI content!\n#AIforDevelopers"}
+    intro_slide = {"title": lesson['title'], "content": f"الفصل {lesson['chapter']} | الجزء {lesson['part']}"}
+    outro_slide = {"title": "شكرًا على المشاهدة", "content": "أعجبك المحتوى؟ شاركه واشترك في القناة لمزيد من دروس الذكاء الاصطناعي\n#مطورو_الذكاء_الاصطناعي"}
     all_slides = [intro_slide] + lesson_content['long_form_slides'] + [outro_slide]
 
     slide_scripts = [
-        f"Hello and welcome to AI for Developers. I'm {YOUR_NAME} talking bot. Today’s lesson is titled {lesson['title']}.",
+        f"درسنا اليوم بعنوان: {lesson['title']}.",
         *[s['content'] for s in lesson_content['long_form_slides']],
-        "Thanks for watching! If you found this helpful, make sure to subscribe to our channel and hit the like button."
+        "شكرًا على المشاهدة. إذا وجدت هذا الدرس مفيدًا، اشترك في القناة واضغط زر الإعجاب."
     ]
 
     slide_audio_paths = []
@@ -82,7 +106,8 @@ def produce_lesson_videos(lesson):
             slide_number=i + 1,
             total_slides=len(all_slides)
         )
-        slide_paths.append(path)
+        video_path = OUTPUT_DIR / "media" / f"long_{unique_id}_{i + 1}.mp4"
+        slide_paths.append(get_pexels_video(slide["title"], "long", video_path) or path)
 
     long_video_path = OUTPUT_DIR / f"long_video_{unique_id}.mp4"
     print(f"🎥 Creating long-form video at: {long_video_path}")
@@ -96,15 +121,14 @@ def produce_lesson_videos(lesson):
 
     print("\n--- Producing Short Video ---")
     # short_script = f"{lesson_content['short_form_highlight']}"
-    short_script = (f"{lesson_content['short_form_highlight']}\n\n"
-    f"Link to the full lesson is in the description below.")
+    short_script = lesson_content['short_form_highlight']
     short_audio_mp3_path = OUTPUT_DIR / f"short_audio_{unique_id}.mp3"
     short_audio_path = text_to_speech(short_script, short_audio_mp3_path)
 
     short_slide_dir = OUTPUT_DIR / f"slides_short_{unique_id}"
     short_slide_content = {
-        "title": "Quick Tip!",
-        "content": f"{lesson_content['short_form_highlight']}\n\n#AI for developers by chaitanya"
+        "title": "نصيحة سريعة",
+        "content": f"{lesson_content['short_form_highlight']}\n\n#مطورو_الذكاء_الاصطناعي"
     }
     short_slide_path = generate_visuals(
         output_dir=short_slide_dir,
@@ -113,48 +137,62 @@ def produce_lesson_videos(lesson):
         slide_number=1,
         total_slides=1
     )
+    short_visual_path = OUTPUT_DIR / "media" / f"short_{unique_id}.mp4"
+    short_media_path = get_pexels_video(lesson["title"], "short", short_visual_path) or short_slide_path
 
     short_video_path = OUTPUT_DIR / f"short_video_{unique_id}.mp4"
     print(f"🎥 Creating short video at: {short_video_path}")
-    create_video([short_slide_path], [short_audio_path], short_video_path, 'short')
+    create_video([short_media_path], [short_audio_path], short_video_path, 'short')
 
     short_thumb_path = generate_visuals(
         output_dir=OUTPUT_DIR,
         video_type='short',
-        thumbnail_title=f"Quick Tip: {lesson['title']}"
+        thumbnail_title=f"نصيحة سريعة: {lesson['title']}"
     )
 
     print("\n📤 Uploading to YouTube...")
-    hashtags = lesson_content.get("hashtags", "#AI #Developer #LearnAI")
-    long_desc = f"Part of the 'AI for Developers' series by {YOUR_NAME}.\n\nToday's Lesson: {lesson['title']}\n\n{hashtags}"
-    long_tags = "AI, Artificial Intelligence, Developer, Programming, Tutorial, " + lesson['title'].replace(" ", ", ")
+    hashtags = lesson_content.get("hashtags", "#الذكاء_الاصطناعي #تعلم_البرمجة #تعلم_الذكاء_الاصطناعي")
+    long_desc = f"هذا الفيديو جزء من سلسلة مطوري الذكاء الاصطناعي التي يقدمها {YOUR_NAME}.\n\nدرس اليوم: {lesson['title']}\n\n{hashtags}"
+    long_tags = "الذكاء الاصطناعي, البرمجة, المطورون, التقنية, تعليم, " + lesson['title'].replace(" ", ", ")
 
-    long_video_id = upload_to_youtube(
-        long_video_path,
-        lesson['title'],
-        long_desc,
-        long_tags,
-        long_thumb_path
-    )
+    long_video_id = lesson.get('youtube_id')
+    if long_video_id:
+        print(f"ℹ️ Long video already uploaded: {long_video_id}. Skipping duplicate upload.")
+    else:
+        long_video_id = upload_to_youtube(
+            long_video_path,
+            lesson['title'],
+            long_desc,
+            long_tags,
+            long_thumb_path
+        )
+        if long_video_id:
+            lesson['youtube_id'] = long_video_id
 
     if long_video_id:
+        upload_to_facebook(long_video_path, lesson['title'], long_desc)
         print("⏳ Waiting 30 seconds before uploading the short...")
         time.sleep(30)
         highlight = (lesson_content.get('short_form_highlight') or '').strip()
         if not highlight:
-            highlight = f"AI Quick Tip: {lesson['title']}"
-        short_title = f"{highlight[:90].rstrip()} #Shorts"
-        # short_desc = f"Watch the full lesson with {YOUR_NAME} here: https://www.youtube.com/watch?v={long_video_id}\n\n#AI #Programming #Tech #Developer"
+            highlight = f"نصيحة سريعة: {lesson['title']}"
+        highlight = " ".join(highlight.split())
+        short_suffix = " #مقاطع_قصيرة"
+        short_title = f"{highlight[:100 - len(short_suffix)].rstrip()}{short_suffix}"
+        if not short_title:
+            short_title = f"نصيحة سريعة: {lesson['title']}"[:100].rstrip()
         short_desc = (f"{lesson_content['short_form_highlight']}\n\n"
-                      f"Watch the full lesson with {YOUR_NAME} here: https://www.youtube.com/watch?v={long_video_id}\n\n"
+                      f"شاهد الدرس الكامل مع {YOUR_NAME} هنا: https://www.youtube.com/watch?v={long_video_id}\n\n"
                       f"{hashtags}")
-        upload_to_youtube(
+        short_video_id = upload_to_youtube(
             short_video_path,
             short_title.strip(),
             short_desc,
-            "AI,Shorts,TechTip",
+            "الذكاء الاصطناعي,مقاطع قصيرة,نصيحة تقنية",
             short_thumb_path
         )
+        if short_video_id:
+            upload_to_facebook(short_video_path, short_title.strip(), short_desc)
         return long_video_id
     return None
 
