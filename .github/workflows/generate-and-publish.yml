@@ -47,13 +47,16 @@ jobs:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
+          REQUIRE_REAL_VIDEO: "true"
+          REQUIRE_FACEBOOK_UPLOAD: "true"
           GEMINI_MODEL: gemini-3.6-flash
           ARABIC_VOICE: ar-SA-HamedNeural
         run: |
           test -n "$GOOGLE_API_KEY" || { echo "GOOGLE_API_KEY is not configured"; exit 1; }
-          echo "PEXELS_API_KEY is optional; fallback visuals will be used if it is unavailable."
+          test -n "$PEXELS_API_KEY" || { echo "PEXELS_API_KEY is not configured. Add it in Settings > Secrets and variables > Actions."; exit 1; }
           test -n "$FACEBOOK_PAGE_ID" || { echo "FACEBOOK_PAGE_ID is not configured"; exit 1; }
           test -n "$FACEBOOK_PAGE_ACCESS_TOKEN" || { echo "FACEBOOK_PAGE_ACCESS_TOKEN is not configured"; exit 1; }
+          echo "PEXELS_API_KEY configured; real video clips are required."
           set -o pipefail
           python -u main.py 2>&1 | tee github-actions.log
 
