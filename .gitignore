@@ -16,6 +16,8 @@ client_secrets.json
 credentials.json
 *.env
 .env
+.env.*
+!.env.example
 encoded_client_secret.txt
 encoded_credentials.txt
 prompt.txt
@@ -23,8 +25,13 @@ prompt.txt
 # VS Code
 .vscode/
 
-#html
+# HTML
 *.html
 
 # Ignore all JSON key files
 gemini-youtube-automator-4ff94a2f3c8a.json
+
+# Local editor history
+.history/
+src/.history/
+.DS_Store

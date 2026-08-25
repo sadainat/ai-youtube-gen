@@ -3,140 +3,143 @@
     {
       "chapter": 1,
       "part": 1,
-      "title": "مقدمة شاملة في الذكاء الاصطناعي وأنواعه ومجالات المستقبل",
+      "title": "مقدمة شاملة في الذكاء الاصطناعي والمفاهيم الأساسية",
       "status": "complete",
-      "youtube_id": "dZPA1BNJqc8"
+      "youtube_id": "C_epLJqU3eY"
     },
     {
       "chapter": 1,
       "part": 2,
-      "title": "إعداد بيئة البرمجة وأساسيات لغة بايثون للذكاء الاصطناعي",
-      "status": "pending",
-      "youtube_id": null
+      "title": "إعداد بيئة العمل ولغة بايثون لمشاريع الذكاء الاصطناعي",
+      "status": "complete",
+      "youtube_id": "lMgojbpOy6U",
+      "youtube_short_id": "Vt0vZi6V_Bs",
+      "facebook_id": "1365902391861466",
+      "facebook_short_id": "1754971598876691"
     },
     {
       "chapter": 1,
       "part": 3,
-      "title": "مكتبات البيانات الأساسية: التعامل مع الأرقام والمصفوفات",
-      "status": "pending",
-      "youtube_id": null
-    },
-    {
-      "chapter": 1,
-      "part": 4,
-      "title": "الرياضيات والمفاهيم الإحصائية الأساسية للذكاء الاصطناعي",
-      "status": "pending",
-      "youtube_id": null
-    },
-    {
-      "chapter": 1,
-      "part": 5,
-      "title": "تحضير البيانات وتنظيفها وتجهيزها لتدريب النماذج",
+      "title": "أساسيات الرياضيات والإحصاء لمطوري الذكاء الاصطناعي",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 2,
       "part": 1,
-      "title": "مدخل إلى تعلم الآلة والفرق بين أنواعه المختلفة",
+      "title": "مقدمة في تعلم الآلة والأنواع المختلفة للتعلم",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 2,
       "part": 2,
-      "title": "خوارزميات التعلم الخاضع للإشراف للانحدار والتصنيف",
+      "title": "جمع البيانات وتنظيفها وإعدادها للتدريب",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 2,
       "part": 3,
-      "title": "خوارزميات التعلم غير الخاضع للإشراف وتجميع البيانات",
+      "title": "خوارزميات الانحدار الخطي والتوقع العددي",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 2,
       "part": 4,
-      "title": "طرق تقييم النماذج وتحسين الدقة وتجنب الإفراط في التلاؤم",
+      "title": "خوارزميات التصنيف وأشجار القرار",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 2,
       "part": 5,
-      "title": "مقدمة إلى الشبكات العصبية الاصطناعية وبنائها الأولي",
+      "title": "تقييم أداء نماذج تعلم الآلة ومقاييس الدقة",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 3,
       "part": 1,
-      "title": "التعلم العميق وبناء الشبكات العصبية متعددة الطبقات",
+      "title": "مقدمة في التعلم العميق وبنية الشبكات العصبية الاصطناعية",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 3,
       "part": 2,
-      "title": "الرؤية الحاسوبية وتحليل الصور باستخدام الشبكات التلافيفية",
+      "title": "دوال التفعيل وآلية الانتشار الخلفي",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 3,
       "part": 3,
-      "title": "معالجة اللغات الطبيعية وفهم النصوص وتصنيفها",
+      "title": "تدريب الشبكات العصبية وتجنب التفرط في التناسب",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 3,
       "part": 4,
-      "title": "الشبكات العصبية المتكررة وتحليل البيانات المتسلسلة",
+      "title": "الشبكات العصبية التلافيفية لمعالجة الصور والرؤية الحاسوبية",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 3,
       "part": 5,
-      "title": "آليات الانتباه وبنية المحولات الحديثة في الذكاء الاصطناعي",
+      "title": "الشبكات العصبية المتكررة لمعالجة البيانات المتسلسلة",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 4,
       "part": 1,
-      "title": "مقدمة في نماذج اللغات الكبيرة وطرق التعامل معها",
+      "title": "أساسيات معالجة اللغات الطبيعية وتحليل النصوص",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 4,
       "part": 2,
-      "title": "الضبط الدقيق لنماذج الذكاء الاصطناعي وتخصيصها للمهام",
+      "title": "تضمين الكلمات وتمثيل النصوص برمجياً",
       "status": "pending",
       "youtube_id": null
     },
     {
       "chapter": 4,
       "part": 3,
-      "title": "الذكاء الاصطناعي التوليدي ونماذج إنشاء الصور والنصوص",
+      "title": "التعلم بالتعزيز وتطبيقاته في اتخاذ القرارات",
       "status": "pending",
       "youtube_id": null
     },
     {
-      "chapter": 4,
+      "chapter": 5,
+      "part": 1,
+      "title": "معمارية المحولات وآلية الانتباه في الذكاء الاصطناعي",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 5,
+      "part": 2,
+      "title": "النماذج اللغوية الكبيرة والذكاء الاصطناعي التوليدي",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 5,
+      "part": 3,
+      "title": "تقنيات هندسة الأوامر الضبط الدقيق للنماذج",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 5,
       "part": 4,
-      "title": "أساسيات التعلم المعزز وبناء النماذج التفاعلية",
-      "status": "pending",
-      "youtube_id": null
-    },
-    {
-      "chapter": 4,
-      "part": 5,
-      "title": "نشر نماذج الذكاء الاصطناعي وبناء تطبيق متكامل في البيئة الفعلية",
+      "title": "بناء ونشر تطبيقات الذكاء الاصطناعي المتكاملة في البيئة الفعلية",
       "status": "pending",
       "youtube_id": null
     }

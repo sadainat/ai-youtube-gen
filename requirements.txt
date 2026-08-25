@@ -1,5 +1,5 @@
 # Gemini API and Google Auth
-google-generativeai
+google-genai
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
@@ -19,3 +19,6 @@ Pillow==9.5.0
 pydub
 arabic-reshaper
 python-bidi
+
+# Load local .env configuration without overriding shell variables
+python-dotenv

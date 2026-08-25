@@ -1,46 +1,71 @@
+import asyncio
 import json
 import os
+import shutil
+import subprocess
 from io import BytesIO
 from pathlib import Path
 
-import google.generativeai as genai
 import arabic_reshaper
-import asyncio
 import edge_tts
 import requests
+from google import genai
+from google.genai import types
 from bidi.algorithm import get_display
 from gtts import gTTS
 from moviepy.config import change_settings
-from moviepy.editor import AudioFileClip, CompositeAudioClip, ImageClip, VideoFileClip, concatenate_videoclips, vfx
+from moviepy.editor import (
+    AudioFileClip,
+    CompositeAudioClip,
+    ImageClip,
+    VideoFileClip,
+    concatenate_videoclips,
+    vfx,
+)
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from pydub import AudioSegment
 
-ASSETS_PATH = Path("assets")
+from src.config import PROJECT_ROOT, REQUIRE_REAL_VIDEO
+
+ASSETS_PATH = PROJECT_ROOT / "assets"
 FONT_FILE = ASSETS_PATH / "fonts" / "arial.ttf"
 BACKGROUND_MUSIC_PATH = ASSETS_PATH / "music" / "bg_music.mp3"
 YOUR_NAME = "شياتانيا"
-MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
-ARABIC_VOICE = os.getenv("ARABIC_VOICE", "ar-SA-HamedNeural")
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip() or "gemini-3.6-flash"
+ARABIC_VOICE = os.getenv("ARABIC_VOICE", "ar-SA-HamedNeural").strip() or "ar-SA-HamedNeural"
+_GEMINI_CLIENT = None
 
 if os.name == "posix" and Path("/usr/bin/convert").exists():
     change_settings({"IMAGEMAGICK_BINARY": "/usr/bin/convert"})
 
 
 def _model():
+    global _GEMINI_CLIENT
+    if _GEMINI_CLIENT is not None:
+        return _GEMINI_CLIENT
+
     api_key = (os.getenv("GOOGLE_API_KEY") or "").strip()
     if not api_key:
         raise RuntimeError("لم يتم ضبط GOOGLE_API_KEY. ضع مفتاح Gemini الحقيقي في الطرفية ثم أعد التشغيل.")
     if api_key in {"مفتاحك_الجديد", "your_api_key", "YOUR_API_KEY"} or not api_key.isascii():
         raise RuntimeError("قيمة GOOGLE_API_KEY غير صالحة. استبدل النص التجريبي بمفتاح Gemini حقيقي من Google AI Studio.")
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel(MODEL_NAME)
+    _GEMINI_CLIENT = genai.Client(api_key=api_key)
+    return _GEMINI_CLIENT
 
 
-def _json_response(response):
-    text = response.text.strip()
+def _generate_json(prompt):
+    response = _model().models.generate_content(
+        model=MODEL_NAME,
+        contents=prompt,
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
+    )
+    text = (response.text or "").strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as error:
+        raise ValueError("Gemini returned invalid JSON.") from error
 
 
 def generate_curriculum(previous_titles=None):
@@ -48,18 +73,42 @@ def generate_curriculum(previous_titles=None):
     if previous_titles:
         history = "العناوين السابقة:\n" + "\n".join(f"- {title}" for title in previous_titles)
     prompt = f"أنشئ منهجًا عربيًا بالكامل من 20 درسًا لسلسلة يوتيوب بعنوان قناة مطوري الذكاء الاصطناعي من {YOUR_NAME}. ابدأ بالمفاهيم للمبتدئين وتدرج إلى موضوعات الذكاء الاصطناعي المتقدمة. تجنب هذه العناوين السابقة:\n{history}\nأعد كائن JSON صحيحًا فقط يحتوي على قائمة lessons. يجب أن تكون قيم chapter وpart رقمية، وأن يكون title عربيًا بالكامل، وأن تكون status مساوية للنص pending وأن تكون youtube_id مساوية للقيمة null. لا تستخدم أي كلمات إنجليزية في العناوين أو المحتوى، باستثناء المصطلحات التقنية الشائعة عند الضرورة."
-    curriculum = _json_response(_model().generate_content(prompt))
-    if not isinstance(curriculum.get("lessons"), list) or not curriculum["lessons"]:
+    curriculum = _generate_json(prompt)
+    lessons = curriculum.get("lessons") if isinstance(curriculum, dict) else None
+    if not isinstance(lessons, list) or not lessons:
         raise ValueError("Gemini returned an invalid curriculum.")
+    for lesson in lessons:
+        if not isinstance(lesson, dict) or not str(lesson.get("title", "")).strip():
+            raise ValueError("Gemini returned a lesson without a title.")
+        if lesson.get("status") != "pending" or lesson.get("youtube_id") is not None:
+            raise ValueError("Gemini returned a lesson with invalid upload state.")
     return curriculum
+
+
+def _validate_generated_content(content):
+    slides = content.get("long_form_slides") if isinstance(content, dict) else None
+    if not isinstance(slides, list) or not slides:
+        raise ValueError("Gemini returned no long-form slides.")
+    if any(
+        not isinstance(slide, dict)
+        or not str(slide.get("title", "")).strip()
+        or not str(slide.get("content", "")).strip()
+        for slide in slides
+    ):
+        raise ValueError("Gemini returned an invalid slide.")
+    if not str(content.get("short_form_highlight", "")).strip():
+        raise ValueError("Gemini returned no short-form highlight.")
+    return content
 
 
 def generate_lesson_content(lesson_title):
     prompt = f"أنشئ درسًا عربيًا بالكامل عن الموضوع التالي: {lesson_title!r}. أعد JSON صحيحًا فقط يحتوي على long_form_slides (من 7 إلى 8 كائنات، لكل منها title وcontent بالعربية)، وshort_form_highlight (ملخص عربي جذاب من جملة أو جملتين)، وhashtags (من 5 إلى 7 وسوم عربية مفصولة بمسافات). لا تكتب أي شرح خارج JSON، ولا تستخدم الإنجليزية إلا داخل المصطلحات التقنية التي يصعب ترجمتها."
-    content = _json_response(_model().generate_content(prompt))
-    if not isinstance(content.get("long_form_slides"), list) or not content["long_form_slides"]:
-        raise ValueError("Gemini returned no lesson slides.")
-    return content
+    return _validate_generated_content(_generate_json(prompt))
+
+
+def generate_story_content(story_title):
+    prompt = f"اكتب قصة عربية تعليمية خيالية ومؤثرة بعنوان {story_title!r} لقناة مطوري الذكاء الاصطناعي. اجعل القصة مناسبة للعائلة، وبها بداية ومشكلة ومحاولات وفشل وتعلم وحل ونهاية ملهمة. اشرح من خلال الأحداث كيف يتعلم الإنسان أو الروبوت من الأخطاء، من دون ادعاء أن الأحداث حقيقية. أعد JSON صحيحًا فقط يحتوي على long_form_slides (من 7 إلى 8 كائنات، لكل منها title وcontent بالعربية، وكل شريحة مشهد متتابع قابل للسرد الصوتي)، وshort_form_highlight (ملخص عربي جذاب من جملة أو جملتين يصلح لفيديو قصير)، وhashtags (من 5 إلى 7 وسوم عربية مفصولة بمسافات). لا تكتب أي شرح خارج JSON، ولا تستخدم الإنجليزية إلا داخل المصطلحات التقنية التي يصعب ترجمتها."
+    return _validate_generated_content(_generate_json(prompt))
 
 
 def text_to_speech(text, output_path):
@@ -83,11 +132,20 @@ def text_to_speech(text, output_path):
 
 
 def get_pexels_image(query, video_type):
-    api_key = os.getenv("PEXELS_API_KEY")
+    api_key = (os.getenv("PEXELS_API_KEY") or "").strip()
     if not api_key:
         return None
     try:
-        response = requests.get("https://api.pexels.com/v1/search", headers={"Authorization": api_key}, params={"query": query, "per_page": 1, "orientation": "portrait" if video_type == "short" else "landscape"}, timeout=15)
+        response = requests.get(
+            "https://api.pexels.com/v1/search",
+            headers={"Authorization": api_key},
+            params={
+                "query": query,
+                "per_page": 1,
+                "orientation": "portrait" if video_type == "short" else "landscape",
+            },
+            timeout=15,
+        )
         response.raise_for_status()
         photos = response.json().get("photos", [])
         if not photos:
@@ -95,39 +153,103 @@ def get_pexels_image(query, video_type):
         image_response = requests.get(photos[0]["src"]["large2x"], timeout=15)
         image_response.raise_for_status()
         return Image.open(BytesIO(image_response.content)).convert("RGBA")
-    except requests.RequestException as error:
-        print(f"Warning: Pexels unavailable, using fallback: {error}")
+    except (requests.RequestException, OSError, ValueError, KeyError) as error:
+        print(f"Warning: Pexels image unavailable, using fallback: {error}")
         return None
+
+
+def _is_valid_video(path):
+    """Return whether ffprobe can find a video stream in ``path``."""
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return False
+    try:
+        result = subprocess.run(
+            [
+                ffprobe,
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=codec_type",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0 and "video" in result.stdout.lower().split()
 
 
 def get_pexels_video(query, video_type, output_path):
-    api_key = os.getenv("PEXELS_API_KEY")
+    """Download and validate a real MP4 clip from Pexels."""
+    api_key = (os.getenv("PEXELS_API_KEY") or "").strip()
     if not api_key:
         return None
-    try:
-        response = requests.get(
-            "https://api.pexels.com/videos/search",
-            headers={"Authorization": api_key},
-            params={"query": query, "per_page": 1, "orientation": "portrait" if video_type == "short" else "landscape"},
-            timeout=15,
-        )
-        response.raise_for_status()
-        videos = response.json().get("videos", [])
-        if not videos:
-            return None
-        files = [file for file in videos[0].get("video_files", []) if file.get("link")]
-        files.sort(key=lambda file: abs((file.get("width") or 0) - (1080 if video_type == "short" else 1920)))
-        if not files:
-            return None
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        video_response = requests.get(files[0]["link"], timeout=60)
-        video_response.raise_for_status()
-        output_path.write_bytes(video_response.content)
-        return output_path
-    except requests.RequestException as error:
-        print(f"Warning: Pexels video unavailable, using designed fallback: {error}")
-        return None
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    orientation = "portrait" if video_type == "short" else "landscape"
+    target_width = 1080 if video_type == "short" else 1920
+    search_queries = []
+    for search_query in (str(query).strip(), "artificial intelligence technology"):
+        if search_query and search_query not in search_queries:
+            search_queries.append(search_query)
+
+    last_error = None
+    for search_query in search_queries:
+        try:
+            response = requests.get(
+                "https://api.pexels.com/videos/search",
+                headers={"Authorization": api_key},
+                params={
+                    "query": search_query,
+                    "per_page": 1,
+                    "orientation": orientation,
+                },
+                timeout=15,
+            )
+            response.raise_for_status()
+            videos = response.json().get("videos", [])
+            if not videos:
+                continue
+
+            files = [
+                file
+                for file in videos[0].get("video_files", [])
+                if file.get("link")
+                and file.get("file_type", "video/mp4") == "video/mp4"
+            ]
+            files.sort(key=lambda file: abs((file.get("width") or 0) - target_width))
+            if not files:
+                continue
+
+            video_response = requests.get(files[0]["link"], timeout=120)
+            video_response.raise_for_status()
+            if not video_response.content:
+                continue
+
+            temporary_path = output_path.with_name(f".{output_path.name}.part")
+            try:
+                temporary_path.write_bytes(video_response.content)
+                if not _is_valid_video(temporary_path):
+                    continue
+                temporary_path.replace(output_path)
+                return output_path
+            finally:
+                temporary_path.unlink(missing_ok=True)
+        except (requests.RequestException, OSError, ValueError, KeyError) as error:
+            last_error = error
+
+    if last_error:
+        print(f"Warning: Pexels video unavailable: {last_error}")
+    return None
 
 
 def _font(size):
@@ -172,6 +294,30 @@ def _fallback_background(width, height, title):
     return image
 
 
+YOUTUBE_MAX_THUMBNAIL_BYTES = 1_900_000
+
+
+def _save_thumbnail(image, path):
+    """Save a readable JPEG small enough for YouTube's thumbnail limit."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    source = image.convert("RGB")
+    for max_dimension in (1920, 1280, 960, 768):
+        candidate = source.copy()
+        candidate.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
+        for quality in (88, 78, 68, 58, 48, 40):
+            candidate.save(
+                path,
+                format="JPEG",
+                quality=quality,
+                optimize=True,
+                progressive=True,
+            )
+            if path.stat().st_size <= YOUTUBE_MAX_THUMBNAIL_BYTES:
+                return path
+    raise ValueError(f"Could not compress thumbnail below {YOUTUBE_MAX_THUMBNAIL_BYTES} bytes: {path}")
+
+
 def generate_visuals(output_dir, video_type, slide_content=None, thumbnail_title=None, slide_number=0, total_slides=0):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -210,27 +356,55 @@ def generate_visuals(output_dir, video_type, slide_content=None, thumbnail_title
             box = draw.textbbox((0, 0), marker, font=footer_font)
             draw.text((width - box[2] - 40, height - footer_height + 12), marker, font=footer_font, fill=(180, 180, 180))
     if is_thumbnail:
-        path = output_dir / f"thumbnail_{video_type}.png"
+        path = _save_thumbnail(image, output_dir / f"thumbnail_{video_type}.jpg")
     else:
         path = output_dir / f"slide_{slide_number:02d}.png"
-    image.save(path)
+        image.save(path)
     return str(path)
 
 
 def create_video(slide_paths, audio_paths, output_path, video_type):
+    """Combine real source clips (or explicit image fallbacks) with narration."""
     if not slide_paths or len(slide_paths) != len(audio_paths):
         raise ValueError("Every slide must have exactly one audio clip.")
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     clips = []
+    sources = []
+    audio_clips = []
+    video = None
+    music = None
     try:
         width, height = (1920, 1080) if video_type == "long" else (1080, 1920)
         for index, (slide_path, audio_path) in enumerate(zip(slide_paths, audio_paths)):
+            slide_path = Path(slide_path)
+            audio_path = Path(audio_path)
+            if not slide_path.is_file():
+                raise FileNotFoundError(f"Slide media not found: {slide_path}")
+            if not audio_path.is_file():
+                raise FileNotFoundError(f"Narration audio not found: {audio_path}")
+
             audio = AudioFileClip(str(audio_path))
+            audio_clips.append(audio)
             duration = audio.duration + 0.5
-            if Path(slide_path).suffix.lower() in {".mp4", ".mov", ".webm", ".m4v"}:
+            if duration <= 0:
+                raise ValueError(f"Narration audio is empty: {audio_path}")
+
+            is_video_file = slide_path.suffix.lower() in {".mp4", ".mov", ".webm", ".m4v"}
+            if is_video_file:
+                if not _is_valid_video(slide_path):
+                    raise ValueError(f"Downloaded media is not a valid video: {slide_path}")
                 source = VideoFileClip(str(slide_path)).without_audio()
-                source = source.fx(vfx.loop, duration=duration) if source.duration < duration else source.subclip(0, duration)
-                animated_slide = source.resize((width, height)).set_duration(duration).set_audio(audio)
+                sources.append(source)
+                if source.duration < duration:
+                    animated_slide = source.fx(vfx.loop, duration=duration)
+                else:
+                    animated_slide = source.subclip(0, duration)
+                animated_slide = animated_slide.resize((width, height)).set_duration(duration).set_audio(audio)
             else:
+                if REQUIRE_REAL_VIDEO:
+                    raise ValueError(f"Image fallback is disabled for real-video mode: {slide_path}")
                 direction = 1 if index % 2 == 0 else -1
                 animated_slide = (
                     ImageClip(str(slide_path))
@@ -242,12 +416,29 @@ def create_video(slide_paths, audio_paths, output_path, video_type):
                     .fadeout(0.3)
                 )
             clips.append(animated_slide)
+
         video = concatenate_videoclips(clips, method="compose")
-        if BACKGROUND_MUSIC_PATH.exists():
+        if BACKGROUND_MUSIC_PATH.is_file() and video.audio is not None:
             music = AudioFileClip(str(BACKGROUND_MUSIC_PATH)).volumex(0.15)
             music = music.fx(vfx.loop, duration=video.duration) if music.duration < video.duration else music.subclip(0, video.duration)
             video = video.set_audio(CompositeAudioClip([video.audio.volumex(1.2), music]))
-        video.write_videofile(str(output_path), fps=24, codec="libx264", audio_codec="aac", audio_bitrate="192k", preset="medium", threads=4)
+        video.write_videofile(
+            str(output_path),
+            fps=24,
+            codec="libx264",
+            audio_codec="aac",
+            audio_bitrate="192k",
+            preset="medium",
+            threads=4,
+        )
     finally:
+        if video is not None:
+            video.close()
+        if music is not None:
+            music.close()
         for clip in clips:
             clip.close()
+        for source in sources:
+            source.close()
+        for audio in audio_clips:
+            audio.close()
