@@ -1,377 +1,253 @@
-# FILE: src/generator.py
-# FINAL, CLEAN VERSION: Compatible with per-slide audio sync, dynamic slides, and GitHub Actions.
-
-import os
 import json
-import requests
+import os
 from io import BytesIO
-import google.generativeai as genai
-from gtts import gTTS
-from moviepy.editor import AudioFileClip, ImageClip, CompositeAudioClip, concatenate_videoclips, vfx
-from moviepy.config import change_settings
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from pathlib import Path
+
+import google.generativeai as genai
+import arabic_reshaper
+import asyncio
+import edge_tts
+import requests
+from bidi.algorithm import get_display
+from gtts import gTTS
+from moviepy.config import change_settings
+from moviepy.editor import AudioFileClip, CompositeAudioClip, ImageClip, VideoFileClip, concatenate_videoclips, vfx
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from pydub import AudioSegment
 
-# --- Configuration ---
 ASSETS_PATH = Path("assets")
-FONT_FILE = ASSETS_PATH / "fonts/arial.ttf"
-BACKGROUND_MUSIC_PATH = ASSETS_PATH / "music/bg_music.mp3"
-FALLBACK_THUMBNAIL_FONT = ImageFont.load_default()
-YOUR_NAME = "Chaitanya"
+FONT_FILE = ASSETS_PATH / "fonts" / "arial.ttf"
+BACKGROUND_MUSIC_PATH = ASSETS_PATH / "music" / "bg_music.mp3"
+YOUR_NAME = "شياتانيا"
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+ARABIC_VOICE = os.getenv("ARABIC_VOICE", "ar-SA-HamedNeural")
 
-# GitHub Actions compatibility for ImageMagick
-if os.name == 'posix':
+if os.name == "posix" and Path("/usr/bin/convert").exists():
     change_settings({"IMAGEMAGICK_BINARY": "/usr/bin/convert"})
 
 
-# def get_pexels_image(query, video_type):
-#     """Searches for a relevant image on Pexels and returns the image object."""
-#     pexels_api_key = os.getenv("PEXELS_API_KEY")
-#     if not pexels_api_key:
-#         print("⚠️ PEXELS_API_KEY not found. Using solid color background.")
-#         return None
-
-#     orientation = 'landscape' if video_type == 'long' else 'portrait'
-#     try:
-#         headers = {"Authorization": pexels_api_key}
-#         params = {"query": f"abstract {query}", "per_page": 1, "orientation": orientation}
-#         response = requests.get("https://api.pexels.com/v1/search", headers=headers, params=params, timeout=15)
-#         response.raise_for_status()
-#         data = response.json()
-#         if data.get('photos'):
-#             image_url = data['photos'][0]['src']['large2x']
-#             image_response = requests.get(image_url, timeout=15)
-#             image_response.raise_for_status()
-#             return Image.open(BytesIO(image_response.content)).convert("RGBA")
-#     except requests.exceptions.RequestException as e:
-#         print(f"❌ Network error fetching Pexels image for query '{query}': {e}")
-#     except Exception as e:
-#         print(f"❌ General error fetching Pexels image for query '{query}': {e}")
-#     return None
+def _model():
+    api_key = (os.getenv("GOOGLE_API_KEY") or "").strip()
+    if not api_key:
+        raise RuntimeError("لم يتم ضبط GOOGLE_API_KEY. ضع مفتاح Gemini الحقيقي في الطرفية ثم أعد التشغيل.")
+    if api_key in {"مفتاحك_الجديد", "your_api_key", "YOUR_API_KEY"} or not api_key.isascii():
+        raise RuntimeError("قيمة GOOGLE_API_KEY غير صالحة. استبدل النص التجريبي بمفتاح Gemini حقيقي من Google AI Studio.")
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel(MODEL_NAME)
 
 
-def text_to_speech(text, output_path):
-    """Converts text to speech using gTTS and ensures clean audio using WAV format."""
-    print(f"🎤 Converting script to speech...")
-    try:
-        temp_mp3_path = str(output_path).replace('.mp3', '_temp.mp3')
-        wav_path = str(output_path.with_suffix('.wav'))
-
-        tts = gTTS(text=text, lang='en', slow=False)
-        tts.save(temp_mp3_path)
-
-        audio = AudioSegment.from_mp3(temp_mp3_path)
-        audio.export(wav_path, format="wav", codec="pcm_s16le")
-        os.remove(temp_mp3_path)
-
-        print(f"✅ Speech generated and converted to WAV successfully!")
-        return Path(wav_path)
-
-    except Exception as e:
-        print(f"❌ ERROR: Failed to generate speech: {e}")
-        raise
+def _json_response(response):
+    text = response.text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    return json.loads(text)
 
 
 def generate_curriculum(previous_titles=None):
-    """Generates the entire course curriculum using Gemini."""
-    print("🤖 No content plan found. Generating a new curriculum from scratch...")
-    try:
-        genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
-        # model = genai.GenerativeModel('gemini-1.5-flash')
-        model = genai.GenerativeModel('gemini-1.5-flash')
-
-        #Optional: Add prior lesson titles for continuation
-        history = ""
-        if previous_titles:
-            formatted = "\n".join([f"{i+1}. {t}" for i, t in enumerate(previous_titles)])
-            history = f"The following lessons have already been created:\n{formatted}\n\nPlease continue from where this series left off.\n"
-
-        prompt = f"""
-        You are an expert AI educator. Generate a curriculum for a YouTube series called 'AI for Developers by {YOUR_NAME}'.
-        {history}
-        The style must be: 'Assume the viewer is a beginner or non-technical person starting their journey into AI as a developer.
-        Use simple real-world analogies, relatable examples, and then connect to technical concepts.'
-
-        The curriculum must guide a developer from absolute beginner to advanced AI, covering foundations like Generative AI, LLMs, Vector Databases, and Agentic AI...
-        ...then continue into deep AI topics like Reinforcement Learning, Transformers internals, multi-agent systems, tool use, LangGraph, AI architecture, and more.
-
-        Respond with ONLY a valid JSON object. The object must contain a key "lessons" which is a list of 20 lesson objects.
-        Each lesson object must have these keys: "chapter", "part", "title", "status" (defaulted to "pending"), and "youtube_id" (defaulted to null).
-        """
-        response = model.generate_content(prompt)
-        json_string = response.text.strip().replace("```json", "").replace("```", "")
-        curriculum = json.loads(json_string)
-        print("✅ New curriculum generated successfully!")
-        return curriculum
-    except Exception as e:
-        print(f"❌ CRITICAL ERROR: Failed to generate curriculum. {e}")
-        raise
+    history = ""
+    if previous_titles:
+        history = "العناوين السابقة:\n" + "\n".join(f"- {title}" for title in previous_titles)
+    prompt = f"أنشئ منهجًا عربيًا بالكامل من 20 درسًا لسلسلة يوتيوب بعنوان قناة مطوري الذكاء الاصطناعي من {YOUR_NAME}. ابدأ بالمفاهيم للمبتدئين وتدرج إلى موضوعات الذكاء الاصطناعي المتقدمة. تجنب هذه العناوين السابقة:\n{history}\nأعد كائن JSON صحيحًا فقط يحتوي على قائمة lessons. يجب أن تكون قيم chapter وpart رقمية، وأن يكون title عربيًا بالكامل، وأن تكون status مساوية للنص pending وأن تكون youtube_id مساوية للقيمة null. لا تستخدم أي كلمات إنجليزية في العناوين أو المحتوى، باستثناء المصطلحات التقنية الشائعة عند الضرورة."
+    curriculum = _json_response(_model().generate_content(prompt))
+    if not isinstance(curriculum.get("lessons"), list) or not curriculum["lessons"]:
+        raise ValueError("Gemini returned an invalid curriculum.")
+    return curriculum
 
 
 def generate_lesson_content(lesson_title):
-    """Generates the content for one long-form lesson and its promotional short."""
-    print(f"🤖 Generating content for lesson: '{lesson_title}'...")
+    prompt = f"أنشئ درسًا عربيًا بالكامل عن الموضوع التالي: {lesson_title!r}. أعد JSON صحيحًا فقط يحتوي على long_form_slides (من 7 إلى 8 كائنات، لكل منها title وcontent بالعربية)، وshort_form_highlight (ملخص عربي جذاب من جملة أو جملتين)، وhashtags (من 5 إلى 7 وسوم عربية مفصولة بمسافات). لا تكتب أي شرح خارج JSON، ولا تستخدم الإنجليزية إلا داخل المصطلحات التقنية التي يصعب ترجمتها."
+    content = _json_response(_model().generate_content(prompt))
+    if not isinstance(content.get("long_form_slides"), list) or not content["long_form_slides"]:
+        raise ValueError("Gemini returned no lesson slides.")
+    return content
+
+
+def text_to_speech(text, output_path):
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_mp3 = output_path.with_name(output_path.stem + "_temp.mp3")
+    wav_path = output_path.with_suffix(".wav")
+    clean_text = str(text).replace("#", "").replace("*", "").strip()
     try:
-        genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
-        # model = genai.GenerativeModel('gemini-1.5-flash')
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = f"""
-        You are creating a lesson for the 'AI for Developers by {YOUR_NAME}' series. The topic is '{lesson_title}'.
-        The style is: Assume the viewer is a beginner developer or non-tech person who wants to learn AI from scratch.
-        Use analogies and clear, simple language. Each concept must be explained from a developer's perspective, assuming no prior AI or ML knowledge.
-
-        Generate a JSON response with three keys:
-        1. "long_form_slides": A list of 7 to 8 slide objects for a longer, more detailed main video. Each object needs a "title" and "content" key.
-        2. "short_form_highlight": A single, punchy, 1-2 sentence summary for a YouTube Short.
-        3. "hashtags": A string of 5-7 relevant, space-separated hashtags for this lesson (e.g., "#GenerativeAI #LLM #Developer","#NeuralNetworks #BeginnerAI #AIforDevelopers").
-
-        Return only valid JSON.
-        """
-        response = model.generate_content(prompt)
-        json_string = response.text.strip().replace("```json", "").replace("```", "")
-        content = json.loads(json_string)
-        print("✅ Lesson content generated successfully.")
-        return content
-    except Exception as e:
-        print(f"❌ ERROR: Failed to generate lesson content: {e}")
-        raise
+        asyncio.run(edge_tts.Communicate(clean_text, ARABIC_VOICE).save(str(temporary_mp3)))
+        AudioSegment.from_mp3(temporary_mp3).export(wav_path, format="wav", codec="pcm_s16le")
+        return wav_path
+    except Exception as error:
+        print(f"Warning: Gulf neural voice unavailable, using Arabic fallback: {error}")
+        gTTS(text=clean_text, lang="ar", slow=False).save(str(temporary_mp3))
+        AudioSegment.from_mp3(temporary_mp3).export(wav_path, format="wav", codec="pcm_s16le")
+        return wav_path
+    finally:
+        if temporary_mp3.exists():
+            temporary_mp3.unlink()
 
 
-# def generate_visuals(output_dir, video_type, slide_content=None, thumbnail_title=None, slide_number=0, total_slides=0):
-#     """Generates a single professional, PPT-style slide or a thumbnail."""
-#     output_dir.mkdir(exist_ok=True, parents=True)
-#     is_thumbnail = thumbnail_title is not None
+def get_pexels_image(query, video_type):
+    api_key = os.getenv("PEXELS_API_KEY")
+    if not api_key:
+        return None
+    try:
+        response = requests.get("https://api.pexels.com/v1/search", headers={"Authorization": api_key}, params={"query": query, "per_page": 1, "orientation": "portrait" if video_type == "short" else "landscape"}, timeout=15)
+        response.raise_for_status()
+        photos = response.json().get("photos", [])
+        if not photos:
+            return None
+        image_response = requests.get(photos[0]["src"]["large2x"], timeout=15)
+        image_response.raise_for_status()
+        return Image.open(BytesIO(image_response.content)).convert("RGBA")
+    except requests.RequestException as error:
+        print(f"Warning: Pexels unavailable, using fallback: {error}")
+        return None
 
-#     width, height = (1920, 1080) if video_type == 'long' else (1080, 1920)
-#     title = thumbnail_title if is_thumbnail else slide_content.get("title", "")
-#     bg_image = get_pexels_image(title, video_type)
 
-#     if not bg_image:
-#         bg_image = Image.new('RGBA', (width, height), color=(12, 17, 29))
-#     bg_image = bg_image.resize((width, height)).filter(ImageFilter.GaussianBlur(5))
-#     darken_layer = Image.new('RGBA', bg_image.size, (0, 0, 0, 150))
-#     final_bg = Image.alpha_composite(bg_image, darken_layer).convert("RGB")
-#     if is_thumbnail and video_type == 'long':
-#         w, h = final_bg.size
-#         if h > w:
-#             print("⚠️ Detected vertical thumbnail for long video. Rotating and resizing to 1920x1080...")
-#             final_bg = final_bg.transpose(Image.ROTATE_270).resize((1920, 1080))
-#     draw = ImageDraw.Draw(final_bg)
+def get_pexels_video(query, video_type, output_path):
+    api_key = os.getenv("PEXELS_API_KEY")
+    if not api_key:
+        return None
+    try:
+        response = requests.get(
+            "https://api.pexels.com/videos/search",
+            headers={"Authorization": api_key},
+            params={"query": query, "per_page": 1, "orientation": "portrait" if video_type == "short" else "landscape"},
+            timeout=15,
+        )
+        response.raise_for_status()
+        videos = response.json().get("videos", [])
+        if not videos:
+            return None
+        files = [file for file in videos[0].get("video_files", []) if file.get("link")]
+        files.sort(key=lambda file: abs((file.get("width") or 0) - (1080 if video_type == "short" else 1920)))
+        if not files:
+            return None
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        video_response = requests.get(files[0]["link"], timeout=60)
+        video_response.raise_for_status()
+        output_path.write_bytes(video_response.content)
+        return output_path
+    except requests.RequestException as error:
+        print(f"Warning: Pexels video unavailable, using designed fallback: {error}")
+        return None
 
-#     try:
-#         title_font = ImageFont.truetype(str(FONT_FILE), 80 if video_type == 'long' else 90)
-#         content_font = ImageFont.truetype(str(FONT_FILE), 45 if video_type == 'long' else 55)
-#         footer_font = ImageFont.truetype(str(FONT_FILE), 25 if video_type == 'long' else 35)
-#     except IOError:
-#         title_font = content_font = footer_font = FALLBACK_THUMBNAIL_FONT
 
-#     if not is_thumbnail:
-#         header_height = int(height * 0.18)
-#         draw.rectangle([0, 0, width, header_height], fill=(25, 40, 65, 200))
-#         title_bbox = draw.textbbox((0, 0), title, font=title_font)
-#         title_x = (width - (title_bbox[2] - title_bbox[0])) / 2
-#         title_y = (header_height - (title_bbox[3] - title_bbox[1])) / 2
-#         draw.text((title_x, title_y), title, font=title_font, fill=(255, 255, 255))
-#     else:
-#         title_bbox = draw.textbbox((0, 0), title, font=title_font)
-#         title_x = (width - (title_bbox[2] - title_bbox[0])) / 2
-#         title_y = (height - (title_bbox[3] - title_bbox[1])) / 2
-#         draw.text((title_x, title_y), title, font=title_font, fill=(255, 255, 255), stroke_width=2, stroke_fill="black")
+def _font(size):
+    try:
+        return ImageFont.truetype(str(FONT_FILE), size)
+    except OSError:
+        return ImageFont.load_default()
 
-#     if not is_thumbnail:
-#         content = slide_content.get("content", "")
-#         is_special_slide = len(content.split()) < 10
 
-#         words = content.split()
-#         lines = []
-#         current_line = ""
-#         for word in words:
-#             test_line = f"{current_line} {word}".strip()
-#             if draw.textbbox((0, 0), test_line, font=content_font)[2] < width * 0.85:
-#                 current_line = test_line
-#             else:
-#                 lines.append(current_line)
-#                 current_line = word
-#         lines.append(current_line)
+def _rtl(text):
+    return get_display(arabic_reshaper.reshape(str(text)))
 
-#         line_height = content_font.getbbox("A")[3] + 15
-#         total_text_height = len(lines) * line_height
-#         y_text = (height - total_text_height) / 2 if is_special_slide else header_height + 100
 
-#         for line in lines:
-#             line_bbox = draw.textbbox((0, 0), line, font=content_font)
-#             line_x = (width - (line_bbox[2] - line_bbox[0])) / 2
-#             draw.text((line_x, y_text), line, font=content_font, fill=(230, 230, 230))
-#             y_text += line_height
+def _wrap(draw, text, font, max_width):
+    lines, current = [], ""
+    for word in str(text).split():
+        candidate = f"{current} {word}".strip()
+        if current and draw.textbbox((0, 0), candidate, font=font)[2] > max_width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    return [_rtl(line) for line in (lines + [current] if current else [""])]
 
-#         footer_height = int(height * 0.06)
-#         draw.rectangle([0, height - footer_height, width, height], fill=(25, 40, 65, 200))
-#         draw.text((40, height - footer_height + 12), f"AI for Developers by {YOUR_NAME}", font=footer_font, fill=(180, 180, 180))
-#         if total_slides > 0:
-#             slide_num_text = f"Slide {slide_number} of {total_slides}"
-#             slide_num_bbox = draw.textbbox((0, 0), slide_num_text, font=footer_font)
-#             draw.text((width - slide_num_bbox[2] - 40, height - footer_height + 12), slide_num_text, font=footer_font, fill=(180, 180, 180))
-#     file_prefix = "thumbnail" if is_thumbnail else f"slide_{slide_number:02d}"
-#     path = output_dir / f"{file_prefix}.png"
-#     final_bg.save(path)
-#     return str(path)
+
+def _fallback_background(width, height, title):
+    image = Image.new("RGBA", (width, height))
+    pixels = image.load()
+    seed = sum(ord(char) for char in title) % 80
+    for y in range(height):
+        ratio = y / max(height - 1, 1)
+        color = (10 + int(18 * ratio), 34 + int(35 * ratio), 62 + int(70 * ratio), 255)
+        for x in range(width):
+            pixels[x, y] = color
+    draw = ImageDraw.Draw(image)
+    accent = (25 + seed, 145, 190, 150)
+    for offset in range(-height, width, 150):
+        draw.line((offset, height, offset + height, 0), fill=accent, width=5)
+    for radius in range(80, min(width, height), 180):
+        draw.ellipse((width - radius * 2 - 80, 90, width - 80, 90 + radius * 2), outline=(70, 210, 220, 80), width=4)
+    draw.rectangle((int(width * 0.06), int(height * 0.1), int(width * 0.94), int(height * 0.9)), outline=(255, 255, 255, 35), width=3)
+    return image
+
 
 def generate_visuals(output_dir, video_type, slide_content=None, thumbnail_title=None, slide_number=0, total_slides=0):
-    """Generates a single professional, PPT-style slide or a thumbnail with corrected alignment."""
-    output_dir.mkdir(exist_ok=True, parents=True)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     is_thumbnail = thumbnail_title is not None
-
-    width, height = (1920, 1080) if video_type == 'long' else (1080, 1920)
-    title = thumbnail_title if is_thumbnail else slide_content.get("title", "")
-    bg_image = get_pexels_image(title, video_type)
-
-    if not bg_image:
-        bg_image = Image.new('RGBA', (width, height), color=(12, 17, 29))
-    bg_image = bg_image.resize((width, height)).filter(ImageFilter.GaussianBlur(5))
-    darken_layer = Image.new('RGBA', bg_image.size, (0, 0, 0, 150))
-    final_bg = Image.alpha_composite(bg_image, darken_layer).convert("RGB")
-
-    if is_thumbnail and video_type == 'long':
-        w, h = final_bg.size
-        if h > w:
-            print("⚠️ Detected vertical thumbnail for long video. Rotating and resizing to 1920x1080...")
-            final_bg = final_bg.transpose(Image.ROTATE_270).resize((1920, 1080))
-
-    draw = ImageDraw.Draw(final_bg)
-
-    try:
-        title_font = ImageFont.truetype(str(FONT_FILE), 80 if video_type == 'long' else 90)
-        content_font = ImageFont.truetype(str(FONT_FILE), 45 if video_type == 'long' else 55)
-        footer_font = ImageFont.truetype(str(FONT_FILE), 25 if video_type == 'long' else 35)
-    except IOError:
-        title_font = content_font = footer_font = FALLBACK_THUMBNAIL_FONT
-
-    if not is_thumbnail:
-        # Header background
-        header_height = int(height * 0.18)
-        draw.rectangle([0, 0, width, header_height], fill=(25, 40, 65, 200))
-
-        # Wrap title text if needed
-        words = title.split()
-        title_lines = []
-        current_line = ""
-        for word in words:
-            test_line = f"{current_line} {word}".strip()
-            bbox = draw.textbbox((0, 0), test_line, font=title_font)
-            if bbox[2] - bbox[0] < width * 0.9:
-                current_line = test_line
-            else:
-                title_lines.append(current_line)
-                current_line = word
-        title_lines.append(current_line)
-
-        # Center vertically in header
-        line_height = title_font.getbbox("A")[3] + 10
-        total_title_height = len(title_lines) * line_height
-        y_text = (header_height - total_title_height) / 2
-
-        for line in title_lines:
-            bbox = draw.textbbox((0, 0), line, font=title_font)
-            x = (width - (bbox[2] - bbox[0])) / 2
-            draw.text((x, y_text), line, font=title_font, fill=(255, 255, 255))
-            y_text += line_height
+    width, height = (1920, 1080) if video_type == "long" else (1080, 1920)
+    title = thumbnail_title if is_thumbnail else (slide_content or {}).get("title", "")
+    background = get_pexels_image(title, video_type) or _fallback_background(width, height, title)
+    if is_thumbnail:
+        image = background.resize((width, height)).convert("RGB")
     else:
-        # Center title on thumbnail
-        bbox = draw.textbbox((0, 0), title, font=title_font)
-        x = (width - (bbox[2] - bbox[0])) / 2
-        y = (height - (bbox[3] - bbox[1])) / 2
-        draw.text((x, y), title, font=title_font, fill=(255, 255, 255), stroke_width=2, stroke_fill="black")
-
+        image = Image.alpha_composite(background.resize((width, height)).filter(ImageFilter.GaussianBlur(4)), Image.new("RGBA", (width, height), (0, 0, 0, 145))).convert("RGB")
+    draw = ImageDraw.Draw(image)
+    title_font, content_font, footer_font = _font(80 if video_type == "long" else 90), _font(45 if video_type == "long" else 55), _font(25 if video_type == "long" else 35)
+    header_height = int(height * 0.2)
     if not is_thumbnail:
-        # Main content block
-        content = slide_content.get("content", "")
-        is_special_slide = len(content.split()) < 10
-
-        words = content.split()
-        lines = []
-        current_line = ""
-        for word in words:
-            test_line = f"{current_line} {word}".strip()
-            if draw.textbbox((0, 0), test_line, font=content_font)[2] < width * 0.85:
-                current_line = test_line
-            else:
-                lines.append(current_line)
-                current_line = word
-        lines.append(current_line)
-
-        line_height = content_font.getbbox("A")[3] + 15
-        total_text_height = len(lines) * line_height
-        y_text = (height - total_text_height) / 2 if is_special_slide else header_height + 100
-
-        for line in lines:
-            bbox = draw.textbbox((0, 0), line, font=content_font)
-            x = (width - (bbox[2] - bbox[0])) / 2
-            draw.text((x, y_text), line, font=content_font, fill=(230, 230, 230))
-            y_text += line_height
-
-        # Footer
+        draw.rectangle((0, 0, width, header_height), fill=(25, 40, 65))
+    if not is_thumbnail:
+        title_lines = _wrap(draw, title, title_font, width * 0.86)
+        y = (header_height - len(title_lines) * 90) / 2
+        for line in title_lines:
+            box = draw.textbbox((0, 0), line, font=title_font)
+            draw.text(((width - box[2] + box[0]) / 2, y), line, font=title_font, fill="white")
+            y += 90
+    if not is_thumbnail:
+        y = header_height + 100
+        for line in _wrap(draw, (slide_content or {}).get("content", ""), content_font, width * 0.84):
+            box = draw.textbbox((0, 0), line, font=content_font)
+            draw.text(((width - box[2] + box[0]) / 2, y), line, font=content_font, fill=(230, 230, 230))
+            y += 60
         footer_height = int(height * 0.06)
-        draw.rectangle([0, height - footer_height, width, height], fill=(25, 40, 65, 200))
-        draw.text((40, height - footer_height + 12), f"AI for Developers by {YOUR_NAME}", font=footer_font, fill=(180, 180, 180))
-
-        if total_slides > 0:
-            slide_num_text = f"Slide {slide_number} of {total_slides}"
-            bbox = draw.textbbox((0, 0), slide_num_text, font=footer_font)
-            draw.text((width - bbox[2] - 40, height - footer_height + 12), slide_num_text, font=footer_font, fill=(180, 180, 180))
-
-    file_prefix = "thumbnail" if is_thumbnail else f"slide_{slide_number:02d}"
-    path = output_dir / f"{file_prefix}.png"
-    final_bg.save(path)
+        draw.rectangle((0, height - footer_height, width, height), fill=(25, 40, 65))
+        footer_text = _rtl(f"مطورو الذكاء الاصطناعي من {YOUR_NAME}")
+        draw.text((40, height - footer_height + 12), footer_text, font=footer_font, fill=(180, 180, 180))
+        if total_slides:
+            marker = _rtl(f"الشريحة {slide_number} من {total_slides}")
+            box = draw.textbbox((0, 0), marker, font=footer_font)
+            draw.text((width - box[2] - 40, height - footer_height + 12), marker, font=footer_font, fill=(180, 180, 180))
+    if is_thumbnail:
+        path = output_dir / f"thumbnail_{video_type}.png"
+    else:
+        path = output_dir / f"slide_{slide_number:02d}.png"
+    image.save(path)
     return str(path)
 
+
 def create_video(slide_paths, audio_paths, output_path, video_type):
-    """Creates a final video from slides and per-slide audio clips with optional background music."""
-    print(f"🎬 Creating {video_type} video...")
+    if not slide_paths or len(slide_paths) != len(audio_paths):
+        raise ValueError("Every slide must have exactly one audio clip.")
+    clips = []
     try:
-        if not slide_paths or not audio_paths or len(slide_paths) != len(audio_paths):
-            raise ValueError("Mismatch between slides and audio clips, or no slides provided.")
-
-        image_clips = []
-        for i, (img_path, audio_path) in enumerate(zip(slide_paths, audio_paths)):
-            audio_clip = AudioFileClip(str(audio_path))
-            duration = audio_clip.duration + 0.5  # Padding
-            img_clip = (
-                ImageClip(img_path)
-                .set_duration(duration)
-                .set_audio(audio_clip)
-                .fadein(0.5)
-                .fadeout(0.5)
-            )
-            image_clips.append(img_clip)
-
-        final_video = concatenate_videoclips(image_clips, method="compose")
-
-        if BACKGROUND_MUSIC_PATH.exists():
-            print("🎵 Adding background music...")
-            bg_music = AudioFileClip(str(BACKGROUND_MUSIC_PATH)).volumex(0.15)
-            if bg_music.duration < final_video.duration:
-                bg_music = bg_music.fx(vfx.loop, duration=final_video.duration)
+        width, height = (1920, 1080) if video_type == "long" else (1080, 1920)
+        for index, (slide_path, audio_path) in enumerate(zip(slide_paths, audio_paths)):
+            audio = AudioFileClip(str(audio_path))
+            duration = audio.duration + 0.5
+            if Path(slide_path).suffix.lower() in {".mp4", ".mov", ".webm", ".m4v"}:
+                source = VideoFileClip(str(slide_path)).without_audio()
+                source = source.fx(vfx.loop, duration=duration) if source.duration < duration else source.subclip(0, duration)
+                animated_slide = source.resize((width, height)).set_duration(duration).set_audio(audio)
             else:
-                bg_music = bg_music.subclip(0, final_video.duration)
-
-            composite_audio = CompositeAudioClip([
-                final_video.audio.volumex(1.2),
-                bg_music
-            ])
-            final_video = final_video.set_audio(composite_audio)
-
-        final_video.write_videofile(
-            str(output_path),
-            fps=24,
-            codec="libx264",
-            audio_codec="aac",
-            audio_bitrate="192k",
-            preset="medium",
-            threads=4
-        )
-        print(f"✅ {video_type.capitalize()} video created successfully!")
-
-    except Exception as e:
-        print(f"❌ ERROR during video creation: {e}")
-        raise
+                direction = 1 if index % 2 == 0 else -1
+                animated_slide = (
+                    ImageClip(str(slide_path))
+                    .set_duration(duration)
+                    .resize(lambda time: 1.0 + 0.06 * time / duration)
+                    .set_position(lambda time: (direction * 12 * time / duration, 0))
+                    .set_audio(audio)
+                    .fadein(0.3)
+                    .fadeout(0.3)
+                )
+            clips.append(animated_slide)
+        video = concatenate_videoclips(clips, method="compose")
+        if BACKGROUND_MUSIC_PATH.exists():
+            music = AudioFileClip(str(BACKGROUND_MUSIC_PATH)).volumex(0.15)
+            music = music.fx(vfx.loop, duration=video.duration) if music.duration < video.duration else music.subclip(0, video.duration)
+            video = video.set_audio(CompositeAudioClip([video.audio.volumex(1.2), music]))
+        video.write_videofile(str(output_path), fps=24, codec="libx264", audio_codec="aac", audio_bitrate="192k", preset="medium", threads=4)
+    finally:
+        for clip in clips:
+            clip.close()

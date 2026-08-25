@@ -9,11 +9,13 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from pathlib import Path
+import requests
 
 # Define the paths for the credential files in the root directory
 CLIENT_SECRETS_FILE = Path('client_secrets.json')
 CREDENTIALS_FILE = Path('credentials.json')
 YOUTUBE_UPLOAD_SCOPE = ["https://www.googleapis.com/auth/youtube.upload"]
+META_GRAPH_VERSION = os.getenv("META_GRAPH_VERSION", "v23.0")
 
 def get_authenticated_service():
     """
@@ -111,4 +113,78 @@ def upload_to_youtube(video_path, title, description, tags, thumbnail_path=None)
     except Exception as e:
         print(f"❌ ERROR: Failed to upload to YouTube. {e}")
         raise
+
+
+def upload_to_facebook(video_path, title, description):
+    """Uploads a video to a configured Facebook Page in resumable chunks."""
+    page_id = os.getenv("FACEBOOK_PAGE_ID", "").strip()
+    access_token = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN", "").strip()
+    if not page_id or not access_token:
+        print("ℹ️ Facebook upload skipped: page credentials are not configured.")
+        return None
+
+    endpoint = f"https://graph.facebook.com/{META_GRAPH_VERSION}/{page_id}/videos"
+    print(f"⬆️ Uploading '{video_path}' to Facebook Page...")
+    try:
+        file_size = Path(video_path).stat().st_size
+        start_response = requests.post(
+            endpoint,
+            params={
+                "access_token": access_token,
+                "upload_phase": "start",
+                "file_size": file_size,
+            },
+            timeout=60,
+        )
+        start_response.raise_for_status()
+        session = start_response.json()
+        upload_session_id = session["upload_session_id"]
+        video_id = session["video_id"]
+        start_offset = int(session.get("start_offset", 0))
+        end_offset = int(session.get("end_offset", 0))
+
+        with open(video_path, "rb") as video_file:
+            while start_offset < file_size:
+                video_file.seek(start_offset)
+                chunk = video_file.read(end_offset - start_offset)
+                if not chunk:
+                    raise RuntimeError("Facebook returned an empty upload chunk.")
+                transfer_response = requests.post(
+                    endpoint,
+                    params={
+                        "access_token": access_token,
+                        "upload_phase": "transfer",
+                        "upload_session_id": upload_session_id,
+                        "start_offset": start_offset,
+                    },
+                    files={"video_file_chunk": (Path(video_path).name, chunk, "video/mp4")},
+                    timeout=1800,
+                )
+                transfer_response.raise_for_status()
+                offsets = transfer_response.json()
+                start_offset = int(offsets.get("start_offset", file_size))
+                end_offset = int(offsets.get("end_offset", file_size))
+
+        finish_response = requests.post(
+            endpoint,
+            params={
+                "access_token": access_token,
+                "upload_phase": "finish",
+                "upload_session_id": upload_session_id,
+                "video_id": video_id,
+                "title": title,
+                "description": description,
+                "published": "true",
+            },
+            timeout=180,
+        )
+        finish_response.raise_for_status()
+        result = finish_response.json()
+        if result.get("success") is False:
+            raise RuntimeError(f"Facebook rejected the video: {finish_response.text[:300]}")
+        print(f"✅ Facebook video uploaded successfully! Video ID: {video_id}")
+        return video_id
+    except requests.RequestException as error:
+        print(f"❌ ERROR: Failed to upload to Facebook Page: {error}")
+        return None
 
