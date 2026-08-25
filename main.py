@@ -1,10 +1,13 @@
-import os
-import json
 import datetime
+import json
+import os
+import shutil
 import sys
 import time
 import traceback
 from pathlib import Path
+
+from src.config import PROJECT_ROOT, REQUIRE_FACEBOOK_UPLOAD, REQUIRE_REAL_VIDEO
 from src.generator import (
     generate_curriculum,
     generate_lesson_content,
@@ -14,12 +17,46 @@ from src.generator import (
     create_video,
     YOUR_NAME
 )
-from src.uploader import upload_to_facebook, upload_to_youtube
+from src.uploader import (
+    facebook_upload_configured,
+    upload_to_facebook,
+    upload_to_youtube,
+)
 
-CONTENT_PLAN_FILE = Path("content_plan.json")
-OUTPUT_DIR = Path("output")
+CONTENT_PLAN_FILE = PROJECT_ROOT / "content_plan.json"
+OUTPUT_DIR = PROJECT_ROOT / "output"
 CONTENT_OUTPUT_DIR = OUTPUT_DIR / "content"
 LESSONS_PER_RUN = 1
+
+
+def validate_runtime():
+    """Fail early when required tools or real-video credentials are missing."""
+    missing = []
+    if not os.getenv("GOOGLE_API_KEY", "").strip():
+        missing.append("GOOGLE_API_KEY")
+    if REQUIRE_REAL_VIDEO and not os.getenv("PEXELS_API_KEY", "").strip():
+        missing.append("PEXELS_API_KEY (مطلوب للفيديو الحقيقي)")
+    if not shutil.which("ffmpeg"):
+        missing.append("ffmpeg")
+    if REQUIRE_REAL_VIDEO and not shutil.which("ffprobe"):
+        missing.append("ffprobe (مطلوب للتحقق من الفيديو الحقيقي)")
+    if REQUIRE_FACEBOOK_UPLOAD and not facebook_upload_configured():
+        missing.append("FACEBOOK_PAGE_ID وFACEBOOK_PAGE_ACCESS_TOKEN")
+    if missing:
+        raise RuntimeError("متطلبات التشغيل غير مكتملة: " + ", ".join(missing))
+
+
+def upload_facebook_or_raise(video_path, title, description):
+    """Publish to Facebook when enabled and fail instead of masking errors."""
+    if not REQUIRE_FACEBOOK_UPLOAD:
+        return None
+    facebook_id = upload_to_facebook(video_path, title, description)
+    if not facebook_id:
+        raise RuntimeError(
+            "فشل رفع الفيديو إلى Facebook. تحقق من صلاحية FACEBOOK_PAGE_ACCESS_TOKEN."
+        )
+    return facebook_id
+
 
 def get_content_plan():
     if not CONTENT_PLAN_FILE.exists():
@@ -70,12 +107,15 @@ def save_lesson_content(lesson, lesson_content):
 
 
 
-def produce_lesson_videos(lesson):
+def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
     print(f"\n▶️ Starting production for Lesson: '{lesson['title']}'")
-    unique_id = f"{datetime.datetime.now().strftime('%Y%m%d')}_{lesson['chapter']}_{lesson['part']}"
+    unique_id = run_id or f"{datetime.datetime.now().strftime('%Y%m%d')}_{lesson['chapter']}_{lesson['part']}"
 
-    print("\n--- Creating Arabic Lesson Content ---")
-    lesson_content = generate_lesson_content(lesson['title'])
+    if lesson_content is None:
+        print("\n--- Creating Arabic Lesson Content ---")
+        lesson_content = generate_lesson_content(lesson['title'])
+    else:
+        print("\n--- Using prepared Arabic Story Content ---")
     save_lesson_content(lesson, lesson_content)
 
     print("\n--- Producing Long-Form Video ---")
@@ -100,15 +140,25 @@ def produce_lesson_videos(lesson):
     slide_dir = OUTPUT_DIR / f"slides_long_{unique_id}"
     slide_paths = []
     for i, slide in enumerate(all_slides):
-        path = generate_visuals(
-            output_dir=slide_dir,
-            video_type='long',
-            slide_content=slide,
-            slide_number=i + 1,
-            total_slides=len(all_slides)
-        )
+        fallback_path = None
+        if not REQUIRE_REAL_VIDEO:
+            fallback_path = generate_visuals(
+                output_dir=slide_dir,
+                video_type="long",
+                slide_content=slide,
+                slide_number=i + 1,
+                total_slides=len(all_slides),
+            )
         video_path = OUTPUT_DIR / "media" / f"long_{unique_id}_{i + 1}.mp4"
-        slide_paths.append(get_pexels_video(slide["title"], "long", video_path) or path)
+        real_video_path = get_pexels_video(slide.get("title", lesson["title"]), "long", video_path)
+        if real_video_path:
+            slide_paths.append(real_video_path)
+        elif REQUIRE_REAL_VIDEO:
+            raise RuntimeError(
+                f"لم يتم العثور على مقطع فيديو حقيقي للشريحة {i + 1}: {slide.get('title', '')}"
+            )
+        else:
+            slide_paths.append(fallback_path)
 
     long_video_path = OUTPUT_DIR / f"long_video_{unique_id}.mp4"
     print(f"🎥 Creating long-form video at: {long_video_path}")
@@ -129,17 +179,25 @@ def produce_lesson_videos(lesson):
     short_slide_dir = OUTPUT_DIR / f"slides_short_{unique_id}"
     short_slide_content = {
         "title": "نصيحة سريعة",
-        "content": f"{lesson_content['short_form_highlight']}\n\n#مطورو_الذكاء_الاصطناعي"
+        "content": f"{lesson_content['short_form_highlight']}\n\n#مطورو_الذكاء_الاصطناعي",
     }
-    short_slide_path = generate_visuals(
-        output_dir=short_slide_dir,
-        video_type='short',
-        slide_content=short_slide_content,
-        slide_number=1,
-        total_slides=1
-    )
+    short_slide_path = None
+    if not REQUIRE_REAL_VIDEO:
+        short_slide_path = generate_visuals(
+            output_dir=short_slide_dir,
+            video_type="short",
+            slide_content=short_slide_content,
+            slide_number=1,
+            total_slides=1,
+        )
     short_visual_path = OUTPUT_DIR / "media" / f"short_{unique_id}.mp4"
-    short_media_path = get_pexels_video(lesson["title"], "short", short_visual_path) or short_slide_path
+    short_media_path = get_pexels_video(lesson["title"], "short", short_visual_path)
+    if not short_media_path:
+        if REQUIRE_REAL_VIDEO:
+            raise RuntimeError(
+                f"لم يتم العثور على مقطع فيديو حقيقي للفيديو القصير: {lesson['title']}"
+            )
+        short_media_path = short_slide_path
 
     short_video_path = OUTPUT_DIR / f"short_video_{unique_id}.mp4"
     print(f"🎥 Creating short video at: {short_video_path}")
@@ -171,7 +229,13 @@ def produce_lesson_videos(lesson):
             lesson['youtube_id'] = long_video_id
 
     if long_video_id:
-        upload_to_facebook(long_video_path, lesson['title'], long_desc)
+        facebook_long_id = upload_facebook_or_raise(
+            long_video_path,
+            lesson["title"],
+            long_desc,
+        )
+        if facebook_long_id:
+            lesson["facebook_id"] = facebook_long_id
         print("⏳ Waiting 30 seconds before uploading the short...")
         time.sleep(30)
         highlight = (lesson_content.get('short_form_highlight') or '').strip()
@@ -190,10 +254,18 @@ def produce_lesson_videos(lesson):
             short_title.strip(),
             short_desc,
             "الذكاء الاصطناعي,مقاطع قصيرة,نصيحة تقنية",
-            short_thumb_path
+            short_thumb_path,
         )
-        if short_video_id:
-            upload_to_facebook(short_video_path, short_title.strip(), short_desc)
+        if not short_video_id:
+            raise RuntimeError("YouTube did not return an ID for the short video.")
+        lesson["youtube_short_id"] = short_video_id
+        facebook_short_id = upload_facebook_or_raise(
+            short_video_path,
+            short_title.strip(),
+            short_desc,
+        )
+        if facebook_short_id:
+            lesson["facebook_short_id"] = facebook_short_id
         return long_video_id
     return None
 
@@ -203,6 +275,7 @@ def main():
     print(f"📁 Current working dir: {os.getcwd()}")
     print(f"📁 OUTPUT_DIR: {OUTPUT_DIR.resolve()}")
 
+    validate_runtime()
     run_failed = False
     try:
         OUTPUT_DIR.mkdir(exist_ok=True)
