@@ -1,6 +1,7 @@
 import os
 import json
 import datetime
+import sys
 import time
 import traceback
 from pathlib import Path
@@ -202,6 +203,7 @@ def main():
     print(f"📁 Current working dir: {os.getcwd()}")
     print(f"📁 OUTPUT_DIR: {OUTPUT_DIR.resolve()}")
 
+    run_failed = False
     try:
         OUTPUT_DIR.mkdir(exist_ok=True)
         print(f"📁 Created output folder: {OUTPUT_DIR.exists()}")
@@ -235,6 +237,7 @@ def main():
                 else:
                     print(f"⚠️ Upload failed: {lesson['title']}")
             except Exception as e:
+                run_failed = True
                 print(f"❌ Failed producing lesson: {lesson['title']}")
                 traceback.print_exc()
             finally:
@@ -242,6 +245,7 @@ def main():
                 print("📦 Content plan updated.")
                 print(f"✅ Updated content plan for lesson: {lesson['title']}")
     except Exception as e:
+        run_failed = True
         print("❌ Critical error in main()")
         traceback.print_exc()
 
@@ -251,6 +255,9 @@ def main():
             print(f"🧹 Deleted: {file}")
     except Exception as e:
         print(f"⚠️ Could not clean up .wav files: {e}")
+
+    if run_failed:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

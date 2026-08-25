@@ -36,7 +36,10 @@ jobs:
       - name: Create YouTube OAuth credentials
         env:
           YOUTUBE_CREDENTIALS_JSON: ${{ secrets.YOUTUBE_CREDENTIALS_JSON }}
-        run: printf '%s' "$YOUTUBE_CREDENTIALS_JSON" > credentials.json
+        run: |
+          test -n "$YOUTUBE_CREDENTIALS_JSON" || { echo "YOUTUBE_CREDENTIALS_JSON is not configured"; exit 1; }
+          printf '%s' "$YOUTUBE_CREDENTIALS_JSON" > credentials.json
+          python -c "import json; json.load(open('credentials.json')); print('YouTube credentials JSON is valid')"
 
       - name: Run generator and publishers
         env:
