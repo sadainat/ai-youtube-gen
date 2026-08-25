@@ -3,10 +3,145 @@
     {
       "chapter": 1,
       "part": 1,
-      "title": "‏قصه كرتونيه قديمه",
+      "title": "مقدمة في الذكاء الاصطناعي والمفاهيم الأساسية",
       "status": "complete",
-      "youtube_id": "sSoJg8hOrAg",
-      "youtube_short_id": "-YRt-H5MAy0"
+      "youtube_id": "qJUt3jxy6nA",
+      "facebook_id": "1779453873295702",
+      "youtube_short_id": "1Nxvoo9v5SA",
+      "facebook_short_id": "1701751824425014"
+    },
+    {
+      "chapter": 1,
+      "part": 2,
+      "title": "أساسيات لغة البرمجة لبناء تطبيقات الذكاء الاصطناعي",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 1,
+      "part": 3,
+      "title": "التعامل مع البيانات وتنظيفها قبل التدريب",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 1,
+      "part": 4,
+      "title": "الرياضيات والإحصاء التي يحتاجها مطور الذكاء الاصطناعي",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 1,
+      "part": 5,
+      "title": "بناء أول نموذج للتنبؤ الخطي البسيط",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 2,
+      "part": 1,
+      "title": "أساسيات تعلم الآلة والتعلم الخاضع للإشراف",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 2,
+      "part": 2,
+      "title": "التعلم غير الخاضع للإشراف وخوارزميات التجميع",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 2,
+      "part": 3,
+      "title": "تقييم أداء نماذج تعلم الآلة ومقاييس الدقة",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 2,
+      "part": 4,
+      "title": "خوارزميات أشجار القرار والغابات العشوائية",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 2,
+      "part": 5,
+      "title": "تطبيق عملي على تصنيف البيانات المعقدة",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 3,
+      "part": 1,
+      "title": "مدخل إلى التعلم العميق والشبكات العصبية الاصطناعية",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 3,
+      "part": 2,
+      "title": "بناء وتدريب شبكة عصبية متعددة الطبقات",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 3,
+      "part": 3,
+      "title": "الشبكات العصبية التلافيفية وتطبيقات الرؤية الحاسوبية",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 3,
+      "part": 4,
+      "title": "الشبكات العصبية المتكررة وتحليل البيانات التسلسلية",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 3,
+      "part": 5,
+      "title": "تقنيات تحسين أداء الشبكات العصبية والحد من الإفراط في التلاؤم",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 4,
+      "part": 1,
+      "title": "معالجة اللغات الطبيعية وتفهم النصوص العربية",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 4,
+      "part": 2,
+      "title": "نماذج المحولات والذكاء الاصطناعي التوليدي",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 4,
+      "part": 3,
+      "title": "هندسة الأوامر والتعامل مع النماذج اللغوية الكبيرة",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 4,
+      "part": 4,
+      "title": "نشر نماذج الذكاء الاصطناعي وتطبيقها في البيئة الإنتاجية",
+      "status": "pending",
+      "youtube_id": null
+    },
+    {
+      "chapter": 4,
+      "part": 5,
+      "title": "أخلاقيات الذكاء الاصطناعي وأثر التكنولوجيا على المستقبل",
+      "status": "pending",
+      "youtube_id": null
     }
   ]
 }
