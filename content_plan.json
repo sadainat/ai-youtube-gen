@@ -1,4 +1,3 @@
-cat << 'EOF' > content_plan.json
 {
   "lessons": [
     {
@@ -10,5 +9,3 @@ cat << 'EOF' > content_plan.json
     }
   ]
 }
-EOF
-git add content_plan.json && git commit -m "Set only one standalone children story" && git push origin main
