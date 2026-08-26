@@ -71,6 +71,112 @@ def facebook_upload_configured():
     )
 
 
+def _upload_to_vercel_blob(file_path):
+    """Upload a file to Vercel Blob and return its public URL."""
+    token = os.getenv("BLOB_READ_WRITE_TOKEN", "").strip()
+    if not token:
+        return None
+    file_path = Path(file_path)
+    with open(file_path, "rb") as f:
+        response = requests.put(
+            f"https://blob.vercel-storage.com/{file_path.name}",
+            headers={
+                "authorization": f"Bearer {token}",
+                "x-content-type": "video/mp4",
+            },
+            data=f,
+            timeout=300,
+        )
+    response.raise_for_status()
+    return response.json().get("url")
+
+
+def _delete_vercel_blob(url):
+    """Delete a file from Vercel Blob after use."""
+    token = os.getenv("BLOB_READ_WRITE_TOKEN", "").strip()
+    if not token or not url:
+        return
+    try:
+        requests.delete(
+            "https://blob.vercel-storage.com/delete",
+            headers={"authorization": f"Bearer {token}"},
+            json={"urls": [url]},
+            timeout=30,
+        )
+    except Exception:
+        pass
+
+
+def upload_to_instagram(video_path, caption):
+    """Upload a video to Instagram as a Reel via Vercel Blob + Graph API."""
+    account_id = os.getenv("INSTAGRAM_ACCOUNT_ID", "").strip()
+    access_token = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN", "").strip()
+    if not account_id or not access_token:
+        print("ℹ️ Instagram upload skipped: credentials are not configured.")
+        return None
+
+    video_path = Path(video_path)
+    if not video_path.is_file():
+        raise FileNotFoundError(f"Instagram upload video not found: {video_path}")
+
+    base_url = f"https://graph.facebook.com/{META_GRAPH_VERSION}"
+    blob_url = None
+    print(f"⬆️ Uploading '{video_path}' to Instagram...")
+    try:
+        # Step 1: Upload to Vercel Blob for public URL
+        blob_url = _upload_to_vercel_blob(video_path)
+        if not blob_url:
+            print("❌ Instagram upload failed: could not get public video URL.")
+            return None
+
+        # Step 2: Create Instagram media container
+        container_response = requests.post(
+            f"{base_url}/{account_id}/media",
+            data={
+                "media_type": "REELS",
+                "video_url": blob_url,
+                "caption": caption,
+                "access_token": access_token,
+            },
+            timeout=60,
+        )
+        _raise_for_api_error(container_response, "Instagram create container")
+        container_id = container_response.json().get("id")
+        if not container_id:
+            raise RuntimeError("Instagram returned no container ID.")
+
+        # Step 3: Wait for video processing
+        import time
+        for _ in range(12):
+            time.sleep(10)
+            status_response = requests.get(
+                f"{base_url}/{container_id}",
+                params={"fields": "status_code", "access_token": access_token},
+                timeout=30,
+            )
+            status = status_response.json().get("status_code", "")
+            if status == "FINISHED":
+                break
+            if status == "ERROR":
+                raise RuntimeError("Instagram video processing failed.")
+
+        # Step 4: Publish the container
+        publish_response = requests.post(
+            f"{base_url}/{account_id}/media_publish",
+            data={"creation_id": container_id, "access_token": access_token},
+            timeout=60,
+        )
+        _raise_for_api_error(publish_response, "Instagram publish")
+        media_id = publish_response.json().get("id")
+        print(f"✅ Instagram Reel uploaded successfully! Media ID: {media_id}")
+        return media_id
+    except Exception as error:
+        print(f"❌ ERROR: Failed to upload to Instagram: {error}")
+        return None
+    finally:
+        _delete_vercel_blob(blob_url)
+
+
 def get_authenticated_service():
     """Return an authenticated YouTube Data API client."""
     _write_credentials_from_environment()

@@ -22,3 +22,6 @@ python-bidi
 
 # Load local .env configuration without overriding shell variables
 python-dotenv
+
+# Vercel Blob for temporary video hosting (Instagram upload)
+vercel-blob

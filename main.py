@@ -20,6 +20,7 @@ from src.generator import (
 from src.uploader import (
     facebook_upload_configured,
     upload_to_facebook,
+    upload_to_instagram,
     upload_to_youtube,
 )
 
@@ -270,6 +271,13 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
         )
         if facebook_short_id:
             lesson["facebook_short_id"] = facebook_short_id
+
+        # Instagram
+        instagram_caption = f"{short_title}\n\n{hashtags}"
+        instagram_id = upload_to_instagram(short_video_path, instagram_caption)
+        if instagram_id:
+            lesson["instagram_id"] = instagram_id
+
         return long_video_id
     return None
 
