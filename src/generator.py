@@ -30,7 +30,7 @@ from src.config import PROJECT_ROOT, REQUIRE_REAL_VIDEO
 ASSETS_PATH = PROJECT_ROOT / "assets"
 FONT_FILE = ASSETS_PATH / "fonts" / "arial.ttf"
 BACKGROUND_MUSIC_PATH = ASSETS_PATH / "music" / "bg_music.mp3"
-YOUR_NAME = "شياتانيا"
+YOUR_NAME = ""
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip() or "gemini-3.6-flash"
 ARABIC_VOICE = os.getenv("ARABIC_VOICE", "ar-SA-HamedNeural").strip() or "ar-SA-HamedNeural"
 _GEMINI_CLIENT = None
@@ -68,11 +68,26 @@ def _generate_json(prompt):
         raise ValueError("Gemini returned invalid JSON.") from error
 
 
+CATEGORIES = [
+    "قصص تاريخية وحضارات",
+    "قصص إسلامية وأنبياء",
+    "أسرار وغموض وحقائق مذهلة",
+    "نصائح مالية وتطوير ذات",
+    "حقائق عن دول وشعوب",
+]
+
+
 def generate_curriculum(previous_titles=None):
     history = ""
     if previous_titles:
         history = "العناوين السابقة:\n" + "\n".join(f"- {title}" for title in previous_titles)
-    prompt = f"أنشئ منهجًا عربيًا بالكامل من 20 درسًا لسلسلة يوتيوب بعنوان قناة مطوري الذكاء الاصطناعي من {YOUR_NAME}. ابدأ بالمفاهيم للمبتدئين وتدرج إلى موضوعات الذكاء الاصطناعي المتقدمة. تجنب هذه العناوين السابقة:\n{history}\nأعد كائن JSON صحيحًا فقط يحتوي على قائمة lessons. يجب أن تكون قيم chapter وpart رقمية، وأن يكون title عربيًا بالكامل، وأن تكون status مساوية للنص pending وأن تكون youtube_id مساوية للقيمة null. لا تستخدم أي كلمات إنجليزية في العناوين أو المحتوى، باستثناء المصطلحات التقنية الشائعة عند الضرورة."
+    categories_str = "\n".join(f"- {c}" for c in CATEGORIES)
+    prompt = f"""أنشئ منهجًا عربيًا من 20 حلقة لقناة يوتيوب عربية متنوعة تقدمها {YOUR_NAME}.
+وزّع الحلقات بالتساوي بين هذه المحاور بالتناوب:
+{categories_str}
+اجعل العناوين مثيرة وجذابة وتشوّق المشاهد. تجنب هذه العناوين السابقة:
+{history}
+أعد كائن JSON صحيحًا فقط يحتوي على قائمة lessons. يجب أن تكون قيم chapter وpart رقمية، وأن يكون title عربيًا بالكامل، وأن تكون status مساوية للنص pending وأن تكون youtube_id مساوية للقيمة null."""
     curriculum = _generate_json(prompt)
     lessons = curriculum.get("lessons") if isinstance(curriculum, dict) else None
     if not isinstance(lessons, list) or not lessons:
@@ -102,7 +117,13 @@ def _validate_generated_content(content):
 
 
 def generate_lesson_content(lesson_title):
-    prompt = f"أنشئ درسًا عربيًا بالكامل عن الموضوع التالي: {lesson_title!r}. أعد JSON صحيحًا فقط يحتوي على long_form_slides (من 7 إلى 8 كائنات، لكل منها title وcontent بالعربية)، وshort_form_highlight (ملخص عربي جذاب من جملة أو جملتين)، وhashtags (من 5 إلى 7 وسوم عربية مفصولة بمسافات). لا تكتب أي شرح خارج JSON، ولا تستخدم الإنجليزية إلا داخل المصطلحات التقنية التي يصعب ترجمتها."
+    prompt = f"""أنشئ حلقة عربية كاملة ومشوّقة عن الموضوع التالي: {lesson_title!r}.
+اجعل الأسلوب سردياً جذاباً يشوّق المشاهد ويجعله يكمل الفيديو.
+أعد JSON صحيحًا فقط يحتوي على:
+- long_form_slides: من 7 إلى 8 كائنات، لكل منها title وcontent بالعربية وsearch_query كلمة بحث إنجليزية واحدة أو اثنتين مناسبة للبحث عن فيديو خلفية
+- short_form_highlight: ملخص عربي جذاب من جملة أو جملتين
+- hashtags: من 5 إلى 7 وسوم عربية مفصولة بمسافات
+لا تكتب أي شرح خارج JSON."""
     return _validate_generated_content(_generate_json(prompt))
 
 
@@ -187,8 +208,55 @@ def _is_valid_video(path):
     return result.returncode == 0 and "video" in result.stdout.lower().split()
 
 
+def get_archive_video(query, output_path):
+    """Download a free Public Domain video from Internet Archive as fallback."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        response = requests.get(
+            "https://archive.org/advancedsearch.php",
+            params={
+                "q": f"{query} mediatype:movies",
+                "fl": "identifier",
+                "rows": 5,
+                "output": "json",
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        docs = response.json().get("response", {}).get("docs", [])
+        for doc in docs:
+            identifier = doc.get("identifier")
+            if not identifier:
+                continue
+            meta = requests.get(f"https://archive.org/metadata/{identifier}", timeout=15)
+            meta.raise_for_status()
+            files = meta.json().get("files", [])
+            mp4_files = [f for f in files if f.get("name", "").endswith(".mp4")]
+            if not mp4_files:
+                continue
+            url = f"https://archive.org/download/{identifier}/{mp4_files[0]['name']}"
+            video_response = requests.get(url, timeout=120, stream=True)
+            video_response.raise_for_status()
+            temporary_path = output_path.with_name(f".{output_path.name}.part")
+            try:
+                with open(temporary_path, "wb") as f:
+                    for chunk in video_response.iter_content(chunk_size=1024 * 1024):
+                        f.write(chunk)
+                if not _is_valid_video(temporary_path):
+                    continue
+                temporary_path.replace(output_path)
+                print(f"✅ Internet Archive video downloaded: {identifier}")
+                return output_path
+            finally:
+                temporary_path.unlink(missing_ok=True)
+    except (requests.RequestException, OSError, ValueError, KeyError) as error:
+        print(f"Warning: Internet Archive video unavailable: {error}")
+    return None
+
+
 def get_pexels_video(query, video_type, output_path):
-    """Download and validate a real MP4 clip from Pexels."""
+    """Download and validate a real MP4 clip from Pexels, with Internet Archive fallback."""
     api_key = (os.getenv("PEXELS_API_KEY") or "").strip()
     if not api_key:
         return None
@@ -249,7 +317,11 @@ def get_pexels_video(query, video_type, output_path):
 
     if last_error:
         print(f"Warning: Pexels video unavailable: {last_error}")
-    return None
+
+    # Fallback to Internet Archive
+    archive_query = search_queries[0] if search_queries else "technology"
+    print(f"🔄 Trying Internet Archive for: {archive_query}")
+    return get_archive_video(archive_query, output_path)
 
 
 def _font(size):

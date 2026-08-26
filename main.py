@@ -124,14 +124,14 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
 
     print("\n--- Producing Long-Form Video ---")
 
-    intro_slide = {"title": lesson['title'], "content": f"الفصل {lesson['chapter']} | الجزء {lesson['part']}"}
-    outro_slide = {"title": "شكرًا على المشاهدة", "content": "أعجبك المحتوى؟ شاركه واشترك في القناة لمزيد من دروس الذكاء الاصطناعي\n#مطورو_الذكاء_الاصطناعي"}
+    intro_slide = {"title": lesson['title'], "content": ""}
+    outro_slide = {"title": "شكرًا على المشاهدة", "content": "أعجبك المحتوى؟ شاركه واشترك في القناة لمزيد من المحتوى"}
     all_slides = [intro_slide] + lesson_content['long_form_slides'] + [outro_slide]
 
     slide_scripts = [
-        f"درسنا اليوم بعنوان: {lesson['title']}.",
+        lesson['title'],
         *[s['content'] for s in lesson_content['long_form_slides']],
-        "شكرًا على المشاهدة. إذا وجدت هذا الدرس مفيدًا، اشترك في القناة واضغط زر الإعجاب."
+        "شكرًا على المشاهدة. اشترك في القناة واضغط زر الإعجاب لمزيد من المحتوى."
     ]
 
     slide_audio_paths = []
@@ -154,7 +154,7 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
                 total_slides=len(all_slides),
             )
         video_path = OUTPUT_DIR / "media" / f"long_{unique_id}_{i + 1}.mp4"
-        real_video_path = get_pexels_video(slide.get("title", lesson["title"]), "long", video_path)
+        real_video_path = get_pexels_video(slide.get("search_query") or slide.get("title", lesson["title"]), "long", video_path)
         if real_video_path:
             slide_paths.append(real_video_path)
         elif REQUIRE_REAL_VIDEO:
@@ -215,8 +215,8 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
 
     print("\n📤 Uploading to YouTube...")
     hashtags = lesson_content.get("hashtags", "#الذكاء_الاصطناعي #تعلم_البرمجة #تعلم_الذكاء_الاصطناعي")
-    long_desc = f"هذا الفيديو جزء من سلسلة مطوري الذكاء الاصطناعي التي يقدمها {YOUR_NAME}.\n\nدرس اليوم: {lesson['title']}\n\n{hashtags}"
-    long_tags = "الذكاء الاصطناعي, البرمجة, المطورون, التقنية, تعليم, " + lesson['title'].replace(" ", ", ")
+    long_desc = f"{lesson['title']}\n\n{hashtags}"
+    long_tags = "تاريخ, قصص, حضارات, إسلام, أسرار, معلومات, " + lesson['title'].replace(" ", ", ")
 
     long_video_id = lesson.get('youtube_id')
     if long_video_id:
@@ -251,13 +251,13 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
         if not short_title:
             short_title = f"نصيحة سريعة: {lesson['title']}"[:100].rstrip()
         short_desc = (f"{lesson_content['short_form_highlight']}\n\n"
-                      f"شاهد الدرس الكامل مع {YOUR_NAME} هنا: https://www.youtube.com/watch?v={long_video_id}\n\n"
+                      f"شاهد الفيديو الكامل هنا: https://www.youtube.com/watch?v={long_video_id}\n\n"
                       f"{hashtags}")
         short_video_id = upload_to_youtube(
             short_video_path,
             short_title.strip(),
             short_desc,
-            "الذكاء الاصطناعي,مقاطع قصيرة,نصيحة تقنية",
+            "تاريخ,قصص,أسرار,معلومات,حضارات",
             short_thumb_path,
         )
         if not short_video_id:
