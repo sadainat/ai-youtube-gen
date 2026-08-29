@@ -290,7 +290,7 @@ def get_pexels_video(query, video_type, output_path):
                 headers={"Authorization": api_key},
                 params={
                     "query": search_query,
-                    "per_page": 1,
+                    "per_page": 10,
                     "orientation": orientation,
                 },
                 timeout=15,
@@ -299,10 +299,12 @@ def get_pexels_video(query, video_type, output_path):
             videos = response.json().get("videos", [])
             if not videos:
                 continue
+            random.shuffle(videos)
+            video = videos[0]
 
             files = [
                 file
-                for file in videos[0].get("video_files", [])
+                for file in video.get("video_files", [])
                 if file.get("link")
                 and file.get("file_type", "video/mp4") == "video/mp4"
             ]
