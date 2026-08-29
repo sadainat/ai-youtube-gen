@@ -50,7 +50,7 @@ jobs:
           INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           REQUIRE_REAL_VIDEO: "true"
-          REQUIRE_FACEBOOK_UPLOAD: "true"
+          REQUIRE_FACEBOOK_UPLOAD: "false"
           GEMINI_MODEL: gemini-3.6-flash
           ARABIC_VOICE: ar-SA-HamedNeural
         run: |
