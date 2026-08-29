@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import random
 import shutil
 import sys
 import time
@@ -15,7 +16,8 @@ from src.generator import (
     generate_visuals,
     get_pexels_video,
     create_video,
-    YOUR_NAME
+    YOUR_NAME,
+    ARABIC_VOICES,
 )
 from src.uploader import (
     facebook_upload_configured,
@@ -123,6 +125,9 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
         print("\n--- Using prepared Arabic Story Content ---")
     save_lesson_content(lesson, lesson_content)
 
+    selected_voice = random.choice(ARABIC_VOICES)
+    print(f"🎙️ Selected voice: {selected_voice}")
+
     print("\n--- Producing Long-Form Video ---")
 
     intro_slide = {"title": lesson['title'], "content": ""}
@@ -138,7 +143,7 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
     slide_audio_paths = []
     for i, script in enumerate(slide_scripts):
         audio_path = OUTPUT_DIR / f"audio_slide_{i+1}_{unique_id}.mp3"
-        wav_path = text_to_speech(script, audio_path)
+        wav_path = text_to_speech(script, audio_path, voice=selected_voice)
         slide_audio_paths.append(wav_path)
     print(f"🎧 Total slide audios: {len(slide_audio_paths)}")
 
@@ -179,7 +184,7 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
     # short_script = f"{lesson_content['short_form_highlight']}"
     short_script = lesson_content['short_form_highlight']
     short_audio_mp3_path = OUTPUT_DIR / f"short_audio_{unique_id}.mp3"
-    short_audio_path = text_to_speech(short_script, short_audio_mp3_path)
+    short_audio_path = text_to_speech(short_script, short_audio_mp3_path, voice=selected_voice)
 
     short_slide_dir = OUTPUT_DIR / f"slides_short_{unique_id}"
     short_slide_content = {
