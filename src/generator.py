@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 import shutil
 import subprocess
 from io import BytesIO
@@ -33,6 +34,16 @@ BACKGROUND_MUSIC_PATH = ASSETS_PATH / "music" / "bg_music.mp3"
 YOUR_NAME = ""
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip() or "gemini-3.6-flash"
 ARABIC_VOICE = os.getenv("ARABIC_VOICE", "ar-SA-HamedNeural").strip() or "ar-SA-HamedNeural"
+ARABIC_VOICES = [
+    "ar-SA-HamedNeural",
+    "ar-SA-ZariyahNeural",
+    "ar-EG-ShakirNeural",
+    "ar-EG-SalmaNeural",
+    "ar-AE-HamdanNeural",
+    "ar-AE-FatimaNeural",
+    "ar-KW-FahedNeural",
+    "ar-KW-NouraNeural",
+]
 _GEMINI_CLIENT = None
 
 if os.name == "posix" and Path("/usr/bin/convert").exists():
@@ -132,14 +143,15 @@ def generate_story_content(story_title):
     return _validate_generated_content(_generate_json(prompt))
 
 
-def text_to_speech(text, output_path):
+def text_to_speech(text, output_path, voice=None):
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temporary_mp3 = output_path.with_name(output_path.stem + "_temp.mp3")
     wav_path = output_path.with_suffix(".wav")
     clean_text = str(text).replace("#", "").replace("*", "").strip()
+    selected_voice = voice or ARABIC_VOICE
     try:
-        asyncio.run(edge_tts.Communicate(clean_text, ARABIC_VOICE).save(str(temporary_mp3)))
+        asyncio.run(edge_tts.Communicate(clean_text, selected_voice).save(str(temporary_mp3)))
         AudioSegment.from_mp3(temporary_mp3).export(wav_path, format="wav", codec="pcm_s16le")
         return wav_path
     except Exception as error:
