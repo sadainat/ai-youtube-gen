@@ -130,8 +130,8 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
 
     print("\n--- Producing Long-Form Video ---")
 
-    intro_slide = {"title": lesson['title'], "content": ""}
-    outro_slide = {"title": "شكرًا على المشاهدة", "content": "أعجبك المحتوى؟ شاركه واشترك في القناة لمزيد من المحتوى"}
+    intro_slide = {"title": lesson['title'], "content": "", "search_query": lesson['title']}
+    outro_slide = {"title": "شكرًا على المشاهدة", "content": "أعجبك المحتوى؟ شاركه واشترك في القناة لمزيد من المحتوى", "search_query": "subscribe channel"}
     all_slides = [intro_slide] + lesson_content['long_form_slides'] + [outro_slide]
 
     slide_scripts = [

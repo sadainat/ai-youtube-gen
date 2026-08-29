@@ -31,7 +31,7 @@ from src.config import PROJECT_ROOT, REQUIRE_REAL_VIDEO
 ASSETS_PATH = PROJECT_ROOT / "assets"
 FONT_FILE = ASSETS_PATH / "fonts" / "arial.ttf"
 BACKGROUND_MUSIC_PATH = ASSETS_PATH / "music" / "bg_music.mp3"
-YOUR_NAME = ""
+YOUR_NAME = "SARD"
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip() or "gemini-3.6-flash"
 ARABIC_VOICE = os.getenv("ARABIC_VOICE", "ar-SA-HamedNeural").strip() or "ar-SA-HamedNeural"
 ARABIC_VOICES = [
@@ -278,7 +278,7 @@ def get_pexels_video(query, video_type, output_path):
     orientation = "portrait" if video_type == "short" else "landscape"
     target_width = 1080 if video_type == "short" else 1920
     search_queries = []
-    for search_query in (str(query).strip(), "artificial intelligence technology"):
+    for search_query in (str(query).strip(), "history documentary"):
         if search_query and search_query not in search_queries:
             search_queries.append(search_query)
 
@@ -435,7 +435,7 @@ def generate_visuals(output_dir, video_type, slide_content=None, thumbnail_title
             y += 60
         footer_height = int(height * 0.06)
         draw.rectangle((0, height - footer_height, width, height), fill=(25, 40, 65))
-        footer_text = _rtl(f"مطورو الذكاء الاصطناعي من {YOUR_NAME}")
+        footer_text = _rtl(f"SARD")
         draw.text((40, height - footer_height + 12), footer_text, font=footer_font, fill=(180, 180, 180))
         if total_slides:
             marker = _rtl(f"الشريحة {slide_number} من {total_slides}")
