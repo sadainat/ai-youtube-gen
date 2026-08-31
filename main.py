@@ -18,6 +18,7 @@ from src.generator import (
     create_video,
     YOUR_NAME,
     ARABIC_VOICES,
+    ENGLISH_VOICES,
 )
 from src.uploader import (
     facebook_upload_configured,
@@ -125,27 +126,43 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
         print("\n--- Using prepared Arabic Story Content ---")
     save_lesson_content(lesson, lesson_content)
 
-    selected_voice = random.choice(ARABIC_VOICES)
-    print(f"🎙️ Selected voice: {selected_voice}")
+    selected_voice_en = random.choice(ENGLISH_VOICES)
+    selected_voice_ar = random.choice(ARABIC_VOICES)
+    print(f"🎙️ YouTube voice: {selected_voice_en} | Facebook voice: {selected_voice_ar}")
 
-    print("\n--- Producing Long-Form Video ---")
+    print("\n--- Producing Long-Form Video (English for YouTube) ---")
 
-    intro_slide = {"title": lesson['title'], "content": "", "search_query": lesson['title']}
-    outro_slide = {"title": "شكرًا على المشاهدة", "content": "أعجبك المحتوى؟ شاركه واشترك في القناة لمزيد من المحتوى", "search_query": "subscribe channel"}
+    intro_slide = {"title": lesson_content.get('english_title') or lesson['title'], "content": "", "search_query": lesson['title']}
+    outro_slide = {"title": "Thanks for watching!", "content": "Like & Subscribe for more!", "search_query": "subscribe channel"}
     all_slides = [intro_slide] + lesson_content['long_form_slides'] + [outro_slide]
 
-    slide_scripts = [
+    slide_scripts_en = [
+        lesson_content.get('english_title') or lesson['title'],
+        *[s['content'] for s in lesson_content['long_form_slides']],
+        "Thanks for watching! Don't forget to like and subscribe for more amazing content."
+    ]
+
+    slide_scripts_ar = [
         lesson['title'],
         *[s['content'] for s in lesson_content['long_form_slides']],
         "شكرًا على المشاهدة. اشترك في القناة واضغط زر الإعجاب لمزيد من المحتوى."
     ]
 
-    slide_audio_paths = []
-    for i, script in enumerate(slide_scripts):
-        audio_path = OUTPUT_DIR / f"audio_slide_{i+1}_{unique_id}.mp3"
-        wav_path = text_to_speech(script, audio_path, voice=selected_voice)
-        slide_audio_paths.append(wav_path)
-    print(f"🎧 Total slide audios: {len(slide_audio_paths)}")
+    # YouTube video (English)
+    slide_audio_paths_en = []
+    for i, script in enumerate(slide_scripts_en):
+        audio_path = OUTPUT_DIR / f"audio_slide_{i+1}_{unique_id}_en.mp3"
+        wav_path = text_to_speech(script, audio_path, voice=selected_voice_en)
+        slide_audio_paths_en.append(wav_path)
+    print(f"🎧 Total slide audios (EN): {len(slide_audio_paths_en)}")
+
+    # Facebook/Instagram video (Arabic)
+    slide_audio_paths_ar = []
+    for i, script in enumerate(slide_scripts_ar):
+        audio_path = OUTPUT_DIR / f"audio_slide_{i+1}_{unique_id}_ar.mp3"
+        wav_path = text_to_speech(script, audio_path, voice=selected_voice_ar)
+        slide_audio_paths_ar.append(wav_path)
+    print(f"🎧 Total slide audios (AR): {len(slide_audio_paths_ar)}")
 
     slide_dir = OUTPUT_DIR / f"slides_long_{unique_id}"
     slide_paths = []
@@ -170,21 +187,25 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
         else:
             slide_paths.append(fallback_path)
 
-    long_video_path = OUTPUT_DIR / f"long_video_{unique_id}.mp4"
-    print(f"🎥 Creating long-form video at: {long_video_path}")
-    create_video(slide_paths, slide_audio_paths, long_video_path, 'long')
+    long_video_path_en = OUTPUT_DIR / f"long_video_{unique_id}_en.mp4"
+    long_video_path_ar = OUTPUT_DIR / f"long_video_{unique_id}_ar.mp4"
+    print(f"🎥 Creating YouTube (EN) video at: {long_video_path_en}")
+    create_video(slide_paths, slide_audio_paths_en, long_video_path_en, 'long')
+    print(f"🎥 Creating Facebook (AR) video at: {long_video_path_ar}")
+    create_video(slide_paths, slide_audio_paths_ar, long_video_path_ar, 'long')
 
     long_thumb_path = generate_visuals(
         output_dir=OUTPUT_DIR,
         video_type='long',
-        thumbnail_title=lesson['title']
+        thumbnail_title=lesson_content.get('english_title') or lesson['title']
     )
 
     print("\n--- Producing Short Video ---")
     # short_script = f"{lesson_content['short_form_highlight']}"
-    short_script = lesson_content['short_form_highlight']
-    short_audio_mp3_path = OUTPUT_DIR / f"short_audio_{unique_id}.mp3"
-    short_audio_path = text_to_speech(short_script, short_audio_mp3_path, voice=selected_voice)
+    short_script_en = lesson_content.get('short_form_highlight') or lesson_content.get('english_description', '')
+    short_script_ar = lesson_content.get('arabic_highlight') or lesson_content.get('short_form_highlight', '')
+    short_audio_en = text_to_speech(short_script_en, OUTPUT_DIR / f"short_audio_{unique_id}_en.mp3", voice=selected_voice_en)
+    short_audio_ar = text_to_speech(short_script_ar, OUTPUT_DIR / f"short_audio_{unique_id}_ar.mp3", voice=selected_voice_ar)
 
     short_slide_dir = OUTPUT_DIR / f"slides_short_{unique_id}"
     short_slide_content = {
@@ -209,9 +230,12 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
             )
         short_media_path = short_slide_path
 
-    short_video_path = OUTPUT_DIR / f"short_video_{unique_id}.mp4"
-    print(f"🎥 Creating short video at: {short_video_path}")
-    create_video([short_media_path], [short_audio_path], short_video_path, 'short')
+    short_video_path_en = OUTPUT_DIR / f"short_video_{unique_id}_en.mp4"
+    short_video_path_ar = OUTPUT_DIR / f"short_video_{unique_id}_ar.mp4"
+    print(f"🎥 Creating YouTube short (EN): {short_video_path_en}")
+    create_video([short_media_path], [short_audio_en], short_video_path_en, 'short')
+    print(f"🎥 Creating Facebook short (AR): {short_video_path_ar}")
+    create_video([short_media_path], [short_audio_ar], short_video_path_ar, 'short')
 
     short_thumb_path = generate_visuals(
         output_dir=OUTPUT_DIR,
@@ -233,7 +257,7 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
         print(f"ℹ️ Long video already uploaded: {long_video_id}. Skipping duplicate upload.")
     else:
         long_video_id = upload_to_youtube(
-            long_video_path,
+            long_video_path_en,
             english_title,
             long_desc_yt,
             long_tags_yt,
@@ -244,7 +268,7 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
 
     if long_video_id:
         facebook_long_id = upload_facebook_or_raise(
-            long_video_path,
+            long_video_path_ar,
             lesson["title"],
             long_desc_fb,
         )
@@ -268,7 +292,7 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
                       f"{hashtags}")
         short_english_title = english_title[:90] + " #Shorts"
         short_video_id = upload_to_youtube(
-            short_video_path,
+            short_video_path_en,
             short_english_title,
             short_desc_yt,
             english_tags,
@@ -278,7 +302,7 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
             raise RuntimeError("YouTube did not return an ID for the short video.")
         lesson["youtube_short_id"] = short_video_id
         facebook_short_id = upload_facebook_or_raise(
-            short_video_path,
+            short_video_path_ar,
             short_title.strip(),
             short_desc_fb,
         )
@@ -286,7 +310,7 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
             lesson["facebook_short_id"] = facebook_short_id
 
         instagram_caption = f"{short_title}\n\n{hashtags}"
-        instagram_id = upload_to_instagram(short_video_path, instagram_caption)
+        instagram_id = upload_to_instagram(short_video_path_ar, instagram_caption)
         if instagram_id:
             lesson["instagram_id"] = instagram_id
 
