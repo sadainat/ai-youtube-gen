@@ -134,7 +134,11 @@ def generate_lesson_content(lesson_title):
 - long_form_slides: من 7 إلى 8 كائنات، لكل منها title وcontent بالعربية وsearch_query كلمة بحث إنجليزية واحدة أو اثنتين مناسبة للبحث عن فيديو خلفية
 - short_form_highlight: ملخص عربي جذاب من جملة أو جملتين
 - hashtags: من 5 إلى 7 وسوم عربية مفصولة بمسافات
+- english_title: عنوان إنجليزي جذاب ومحسّن لـ SEO لا يتجاوز 90 حرفاً
+- english_description: وصف إنجليزي جذاب من 3 إلى 4 جمل محسّن لـ SEO
+- english_tags: من 8 إلى 10 كلمات مفتاحية إنجليزية مفصولة بفواصل
 لا تكتب أي شرح خارج JSON."""
+    return _validate_generated_content(_generate_json(prompt))
     return _validate_generated_content(_generate_json(prompt))
 
 

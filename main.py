@@ -220,9 +220,13 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
     )
 
     print("\n📤 Uploading to YouTube...")
-    hashtags = lesson_content.get("hashtags", "#الذكاء_الاصطناعي #تعلم_البرمجة #تعلم_الذكاء_الاصطناعي")
-    long_desc = f"{lesson['title']}\n\n{hashtags}"
-    long_tags = "تاريخ, قصص, حضارات, إسلام, أسرار, معلومات, " + lesson['title'].replace(" ", ", ")
+    hashtags = lesson_content.get("hashtags", "#تاريخ #قصص #أسرار")
+    english_title = lesson_content.get("english_title") or lesson["title"]
+    english_desc = lesson_content.get("english_description") or lesson["title"]
+    english_tags = lesson_content.get("english_tags") or "history,stories,secrets,facts,arabic"
+    long_desc_yt = f"{english_desc}\n\n{english_tags.replace(',', ' #')}"
+    long_desc_fb = f"{lesson['title']}\n\n{hashtags}"
+    long_tags_yt = english_tags
 
     long_video_id = lesson.get('youtube_id')
     if long_video_id:
@@ -230,9 +234,9 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
     else:
         long_video_id = upload_to_youtube(
             long_video_path,
-            lesson['title'],
-            long_desc,
-            long_tags,
+            english_title,
+            long_desc_yt,
+            long_tags_yt,
             long_thumb_path
         )
         if long_video_id:
@@ -242,7 +246,7 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
         facebook_long_id = upload_facebook_or_raise(
             long_video_path,
             lesson["title"],
-            long_desc,
+            long_desc_fb,
         )
         if facebook_long_id:
             lesson["facebook_id"] = facebook_long_id
@@ -256,14 +260,18 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
         short_title = f"{highlight[:100 - len(short_suffix)].rstrip()}{short_suffix}"
         if not short_title:
             short_title = f"نصيحة سريعة: {lesson['title']}"[:100].rstrip()
-        short_desc = (f"{lesson_content['short_form_highlight']}\n\n"
+        short_desc_yt = (f"{lesson_content.get('english_description', english_title)}\n\n"
+                      f"Watch full video: https://www.youtube.com/watch?v={long_video_id}\n\n"
+                      f"{english_tags}")
+        short_desc_fb = (f"{lesson_content['short_form_highlight']}\n\n"
                       f"شاهد الفيديو الكامل هنا: https://www.youtube.com/watch?v={long_video_id}\n\n"
                       f"{hashtags}")
+        short_english_title = english_title[:90] + " #Shorts"
         short_video_id = upload_to_youtube(
             short_video_path,
-            short_title.strip(),
-            short_desc,
-            "تاريخ,قصص,أسرار,معلومات,حضارات",
+            short_english_title,
+            short_desc_yt,
+            english_tags,
             short_thumb_path,
         )
         if not short_video_id:
@@ -272,12 +280,11 @@ def produce_lesson_videos(lesson, lesson_content=None, run_id=None):
         facebook_short_id = upload_facebook_or_raise(
             short_video_path,
             short_title.strip(),
-            short_desc,
+            short_desc_fb,
         )
         if facebook_short_id:
             lesson["facebook_short_id"] = facebook_short_id
 
-        # Instagram
         instagram_caption = f"{short_title}\n\n{hashtags}"
         instagram_id = upload_to_instagram(short_video_path, instagram_caption)
         if instagram_id:
