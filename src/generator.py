@@ -44,6 +44,14 @@ ARABIC_VOICES = [
     "ar-KW-FahedNeural",
     "ar-KW-NouraNeural",
 ]
+ENGLISH_VOICES = [
+    "en-US-GuyNeural",
+    "en-US-JennyNeural",
+    "en-GB-RyanNeural",
+    "en-GB-SoniaNeural",
+    "en-AU-WilliamNeural",
+    "en-AU-NatashaNeural",
+]
 _GEMINI_CLIENT = None
 
 if os.name == "posix" and Path("/usr/bin/convert").exists():
@@ -128,16 +136,18 @@ def _validate_generated_content(content):
 
 
 def generate_lesson_content(lesson_title):
-    prompt = f"""أنشئ حلقة عربية كاملة ومشوّقة عن الموضوع التالي: {lesson_title!r}.
-اجعل الأسلوب سردياً جذاباً يشوّق المشاهد ويجعله يكمل الفيديو.
-أعد JSON صحيحًا فقط يحتوي على:
-- long_form_slides: من 7 إلى 8 كائنات، لكل منها title وcontent بالعربية وsearch_query كلمة بحث إنجليزية واحدة أو اثنتين مناسبة للبحث عن فيديو خلفية
-- short_form_highlight: ملخص عربي جذاب من جملة أو جملتين
-- hashtags: من 5 إلى 7 وسوم عربية مفصولة بمسافات
-- english_title: عنوان إنجليزي جذاب ومحسّن لـ SEO لا يتجاوز 90 حرفاً
-- english_description: وصف إنجليزي جذاب من 3 إلى 4 جمل محسّن لـ SEO
-- english_tags: من 8 إلى 10 كلمات مفتاحية إنجليزية مفصولة بفواصل
-لا تكتب أي شرح خارج JSON."""
+    prompt = f"""Create a complete and engaging English episode about: {lesson_title!r}.
+Use a storytelling style that hooks the viewer and keeps them watching.
+Return valid JSON only containing:
+- long_form_slides: 7 to 8 objects, each with title and content in English, and search_query (1-2 English words for background video search)
+- short_form_highlight: catchy English summary in 1-2 sentences
+- hashtags: 5 to 7 Arabic hashtags separated by spaces (for Facebook/Instagram)
+- english_title: catchy SEO-optimized English YouTube title max 90 chars
+- english_description: 3-4 sentence SEO-optimized English description
+- english_tags: 8-10 comma-separated English keywords
+- arabic_highlight: catchy Arabic summary in 1-2 sentences (for Facebook/Instagram)
+Do not write anything outside JSON."""
+    return _validate_generated_content(_generate_json(prompt))
     return _validate_generated_content(_generate_json(prompt))
     return _validate_generated_content(_generate_json(prompt))
 
