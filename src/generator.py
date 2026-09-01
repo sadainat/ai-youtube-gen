@@ -36,13 +36,6 @@ MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip() or "gemini-3.
 ARABIC_VOICE = os.getenv("ARABIC_VOICE", "ar-SA-HamedNeural").strip() or "ar-SA-HamedNeural"
 ARABIC_VOICES = [
     "ar-SA-HamedNeural",
-    "ar-SA-ZariyahNeural",
-    "ar-EG-ShakirNeural",
-    "ar-EG-SalmaNeural",
-    "ar-AE-HamdanNeural",
-    "ar-AE-FatimaNeural",
-    "ar-KW-FahedNeural",
-    "ar-KW-NouraNeural",
 ]
 ENGLISH_VOICES = [
     "en-US-GuyNeural",
@@ -136,19 +129,17 @@ def _validate_generated_content(content):
 
 
 def generate_lesson_content(lesson_title):
-    prompt = f"""Create a complete and engaging English episode about: {lesson_title!r}.
-Use a storytelling style that hooks the viewer and keeps them watching.
-Return valid JSON only containing:
-- long_form_slides: 7 to 8 objects, each with title and content in English, and search_query (1-2 English words for background video search)
-- short_form_highlight: catchy English summary in 1-2 sentences
-- hashtags: 5 to 7 Arabic hashtags separated by spaces (for Facebook/Instagram)
-- english_title: catchy SEO-optimized English YouTube title max 90 chars
-- english_description: 3-4 sentence SEO-optimized English description
-- english_tags: 8-10 comma-separated English keywords
-- arabic_highlight: catchy Arabic summary in 1-2 sentences (for Facebook/Instagram)
-Do not write anything outside JSON."""
-    return _validate_generated_content(_generate_json(prompt))
-    return _validate_generated_content(_generate_json(prompt))
+    prompt = f"""اكتب حلقة عربية كاملة وجذابة عن: {lesson_title!r}.
+استخدم أسلوب سرد قصصي يشد المشاهد ويبقيه حتى النهاية.
+أعد JSON صحيحًا فقط يحتوي على:
+- long_form_slides: من 7 إلى 8 كائنات، لكل منها title وcontent بالعربية، وsearch_query (كلمة أو كلمتان بالإنجليزية للبحث عن فيديو خلفية)
+- short_form_highlight: ملخص عربي جذاب من جملة أو جملتين
+- hashtags: من 5 إلى 7 وسوم عربية مفصولة بمسافات
+- arabic_title: عنوان يوتيوب عربي جذاب ومحسّن لمحركات البحث بحد أقصى 90 حرفًا
+- arabic_description: وصف عربي من 3 إلى 4 جمل محسّن لمحركات البحث
+- arabic_tags: من 8 إلى 10 كلمات مفتاحية عربية مفصولة بفواصل
+- arabic_highlight: ملخص عربي جذاب من جملة أو جملتين للفيديو القصير
+لا تكتب أي شيء خارج JSON."""
     return _validate_generated_content(_generate_json(prompt))
 
 
@@ -165,7 +156,7 @@ def text_to_speech(text, output_path, voice=None):
     clean_text = str(text).replace("#", "").replace("*", "").strip()
     selected_voice = voice or ARABIC_VOICE
     try:
-        asyncio.run(edge_tts.Communicate(clean_text, selected_voice).save(str(temporary_mp3)))
+        asyncio.run(edge_tts.Communicate(clean_text, selected_voice, rate="+5%", pitch="-3Hz").save(str(temporary_mp3)))
         AudioSegment.from_mp3(temporary_mp3).export(wav_path, format="wav", codec="pcm_s16le")
         return wav_path
     except Exception as error:
