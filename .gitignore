@@ -35,3 +35,7 @@ gemini-youtube-automator-4ff94a2f3c8a.json
 .history/
 src/.history/
 .DS_Store
+
+.env
+credentials.json
+client_secrets.json
