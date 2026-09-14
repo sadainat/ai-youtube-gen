@@ -16,12 +16,20 @@ from PIL import Image
 
 from src.config import PROJECT_ROOT
 
-CLIENT_SECRETS_FILE = Path(
-    os.getenv("YOUTUBE_CLIENT_SECRETS_FILE", str(PROJECT_ROOT / "client_secrets.json"))
-)
-CREDENTIALS_FILE = Path(
-    os.getenv("YOUTUBE_CREDENTIALS_FILE", str(PROJECT_ROOT / "credentials.json"))
-)
+def _get_client_secrets_file():
+    return Path(
+        os.getenv("YOUTUBE_CLIENT_SECRETS_FILE", str(PROJECT_ROOT / "client_secrets.json"))
+    )
+
+
+def _get_credentials_file():
+    return Path(
+        os.getenv("YOUTUBE_CREDENTIALS_FILE", str(PROJECT_ROOT / "credentials.json"))
+    )
+
+
+CLIENT_SECRETS_FILE = _get_client_secrets_file()
+CREDENTIALS_FILE = _get_credentials_file()
 YOUTUBE_UPLOAD_SCOPE = ["https://www.googleapis.com/auth/youtube.upload"]
 META_GRAPH_VERSION = os.getenv("META_GRAPH_VERSION", "v23.0").strip() or "v23.0"
 if not META_GRAPH_VERSION.startswith("v"):
@@ -30,10 +38,8 @@ META_GRAPH_HOST = os.getenv("META_GRAPH_HOST", "https://graph-video.facebook.com
 
 
 def _write_credentials_from_environment():
-    """Materialize GitHub Actions credentials only when no local file exists."""
-    if CREDENTIALS_FILE.exists():
-        return
-
+    """Materialize the latest GitHub Actions credentials over any stale local file."""
+    credentials_file = _get_credentials_file()
     raw_credentials = os.getenv("YOUTUBE_CREDENTIALS_JSON", "").strip()
     if not raw_credentials:
         return
@@ -45,11 +51,11 @@ def _write_credentials_from_environment():
     if not isinstance(credentials, dict):
         raise ValueError("YOUTUBE_CREDENTIALS_JSON must contain a JSON object.")
 
-    CREDENTIALS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    temporary_file = CREDENTIALS_FILE.with_name(f".{CREDENTIALS_FILE.name}.tmp")
+    credentials_file.parent.mkdir(parents=True, exist_ok=True)
+    temporary_file = credentials_file.with_name(f".{credentials_file.name}.tmp")
     temporary_file.write_text(json.dumps(credentials), encoding="utf-8")
-    temporary_file.replace(CREDENTIALS_FILE)
-    print(f"INFO: YouTube credentials restored from YOUTUBE_CREDENTIALS_JSON to {CREDENTIALS_FILE}")
+    temporary_file.replace(credentials_file)
+    print(f"INFO: YouTube credentials restored from YOUTUBE_CREDENTIALS_JSON to {credentials_file}")
 
 
 def _raise_for_api_error(response, service_name):
@@ -179,35 +185,71 @@ def upload_to_instagram(video_path, caption):
 
 def get_authenticated_service():
     """Return an authenticated YouTube Data API client."""
+    credentials_file = _get_credentials_file()
+    client_secrets_file = _get_client_secrets_file()
+
     _write_credentials_from_environment()
     credentials = None
 
-    if CREDENTIALS_FILE.exists():
-        print("INFO: Found existing credentials file.")
-        credentials = Credentials.from_authorized_user_file(
-            str(CREDENTIALS_FILE), YOUTUBE_UPLOAD_SCOPE
-        )
+    if credentials_file.exists():
+        print(f"INFO: Found existing credentials file at {credentials_file}.")
+        try:
+            credentials = Credentials.from_authorized_user_file(
+                str(credentials_file), YOUTUBE_UPLOAD_SCOPE
+            )
+        except ValueError as error:
+            print(
+                "ERROR: The existing credentials.json is invalid. "
+                "It is missing the required Google OAuth fields (refresh_token, client_secret, client_id). "
+                "Delete it or regenerate a fresh OAuth file before retrying."
+            )
+            if os.getenv("GITHUB_ACTIONS"):
+                raise RuntimeError(
+                    "YouTube OAuth file is invalid. Generate a fresh credentials.json via the Google OAuth flow "
+                    "and update YOUTUBE_CREDENTIALS_JSON in GitHub Actions."
+                ) from error
+            credentials = None
 
     if not credentials or not credentials.valid:
         if credentials and credentials.expired and credentials.refresh_token:
             print("INFO: Refreshing expired credentials...")
-            credentials.refresh(Request())
-        else:
+            try:
+                credentials.refresh(Request())
+            except Exception as error:
+                print(
+                    "WARNING: The stored YouTube OAuth credentials are expired or revoked. "
+                    "Starting a clean re-auth flow."
+                )
+                if credentials_file.exists():
+                    credentials_file.unlink(missing_ok=True)
+                if os.getenv("GITHUB_ACTIONS"):
+                    raise RuntimeError(
+                        "YouTube OAuth token expired or was revoked. "
+                        "Generate a fresh credentials.json with a new Google OAuth consent flow "
+                        "and update the YOUTUBE_CREDENTIALS_JSON GitHub Actions secret before retrying."
+                    ) from error
+                credentials = None
+            else:
+                credentials_file.parent.mkdir(parents=True, exist_ok=True)
+                credentials_file.write_text(credentials.to_json(), encoding="utf-8")
+                print(f"INFO: Credentials refreshed and saved to {credentials_file}")
+
+        if not credentials or not credentials.valid:
             print("INFO: No valid credentials found. Starting new authentication flow...")
-            if not CLIENT_SECRETS_FILE.exists():
+            if not client_secrets_file.exists():
                 raise FileNotFoundError(
-                    f"CRITICAL ERROR: {CLIENT_SECRETS_FILE} not found. "
+                    f"CRITICAL ERROR: {client_secrets_file} not found. "
                     "Please download it from Google Cloud Console."
                 )
 
             flow = InstalledAppFlow.from_client_secrets_file(
-                str(CLIENT_SECRETS_FILE), scopes=YOUTUBE_UPLOAD_SCOPE
+                str(client_secrets_file), scopes=YOUTUBE_UPLOAD_SCOPE
             )
             credentials = flow.run_local_server(port=0)
 
-        CREDENTIALS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        CREDENTIALS_FILE.write_text(credentials.to_json(), encoding="utf-8")
-        print(f"INFO: Credentials saved to {CREDENTIALS_FILE}")
+            credentials_file.parent.mkdir(parents=True, exist_ok=True)
+            credentials_file.write_text(credentials.to_json(), encoding="utf-8")
+            print(f"INFO: Credentials saved to {credentials_file}")
 
     return build("youtube", "v3", credentials=credentials)
 
