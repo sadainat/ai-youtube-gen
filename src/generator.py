@@ -35,6 +35,7 @@ FONT_FILE = ASSETS_PATH / "fonts" / "arial.ttf"
 BACKGROUND_MUSIC_PATH = ASSETS_PATH / "music" / "bg_music.mp3"
 YOUR_NAME = "SARD"
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip() or "gemini-3.6-flash"
+FALLBACK_MODEL_NAME = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
 ARABIC_VOICE = os.getenv("ARABIC_VOICE", "ar-SA-HamedNeural").strip() or "ar-SA-HamedNeural"
 ARABIC_VOICES = [
     "ar-SA-HamedNeural",
@@ -69,15 +70,14 @@ def _model():
     return _GEMINI_CLIENT
 
 
-def _generate_json(prompt):
+def _generate_content(prompt, model_name):
     for attempt in range(1, _GEMINI_MAX_ATTEMPTS + 1):
         try:
-            response = _model().models.generate_content(
-                model=MODEL_NAME,
+            return _model().models.generate_content(
+                model=model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(response_mime_type="application/json"),
             )
-            break
         except genai_errors.APIError as error:
             if error.code not in _GEMINI_RETRYABLE_STATUS_CODES or attempt == _GEMINI_MAX_ATTEMPTS:
                 raise
@@ -87,6 +87,21 @@ def _generate_json(prompt):
                 f"retrying in {delay}s (attempt {attempt + 1}/{_GEMINI_MAX_ATTEMPTS})."
             )
             time.sleep(delay)
+
+
+def _generate_json(prompt):
+    model_names = list(dict.fromkeys((MODEL_NAME, FALLBACK_MODEL_NAME)))
+    for index, model_name in enumerate(model_names):
+        try:
+            response = _generate_content(prompt, model_name)
+            break
+        except genai_errors.APIError as error:
+            if error.code not in _GEMINI_RETRYABLE_STATUS_CODES or index == len(model_names) - 1:
+                raise
+            print(
+                f"⚠️ Gemini model {model_name} remained unavailable after "
+                f"{_GEMINI_MAX_ATTEMPTS} attempts; switching to {model_names[index + 1]}."
+            )
     text = (response.text or "").strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()

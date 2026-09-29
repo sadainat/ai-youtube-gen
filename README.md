@@ -35,6 +35,7 @@ gemini-youtube-automation/
 3. **Environment variables**
     - **`GOOGLE_API_KEY`** (required): Google AI / Gemini API key.
     - **`GEMINI_MODEL`** (optional): Gemini model name. Defaults to `gemini-3.6-flash`.
+      - **`GEMINI_FALLBACK_MODEL`** (optional): Model used after repeated temporary server errors from the primary model. Defaults to `gemini-3.8-flash`.
     - **`PEXELS_API_KEY`** (required when `REQUIRE_REAL_VIDEO=true`): Pexels API key used to download real video clips.
     - **`REQUIRE_REAL_VIDEO`** (optional): Defaults to `true`; set to `false` only if image-slide fallback is intentional.
     - **`REQUIRE_FACEBOOK_UPLOAD`** (optional): Defaults to `true`; set to `false` only when Facebook publishing is intentionally disabled.

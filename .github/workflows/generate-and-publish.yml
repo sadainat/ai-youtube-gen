@@ -52,6 +52,7 @@ jobs:
           REQUIRE_REAL_VIDEO: "true"
           REQUIRE_FACEBOOK_UPLOAD: "true"
           GEMINI_MODEL: gemini-3.6-flash
+          GEMINI_FALLBACK_MODEL: gemini-3.8-flash
           ARABIC_VOICE: ar-SA-HamedNeural
         run: |
           test -n "$GOOGLE_API_KEY" || { echo "GOOGLE_API_KEY is not configured"; exit 1; }

@@ -55,3 +55,27 @@ class TestGeneratorRetry(unittest.TestCase):
         self.assertEqual(error.exception.code, 400)
         self.assertEqual(models.calls, 1)
         self.assertEqual(delays, [])
+
+    def test_generate_json_uses_fallback_after_primary_server_errors(self):
+        primary = FakeModels([APIError(503, {"error": {"message": "busy"}})] * 4)
+        fallback = FakeModels([SimpleNamespace(text='{"ok": true}')])
+        delays = []
+        requested_models = []
+
+        def generate_content(model, **kwargs):
+            requested_models.append(model)
+            target = primary if model == "gemini-3.6-flash" else fallback
+            return target.generate_content(**kwargs)
+
+        with patch.object(
+            generator,
+            "_model",
+            side_effect=lambda: SimpleNamespace(models=SimpleNamespace(generate_content=generate_content)),
+        ), patch.object(generator, "MODEL_NAME", "gemini-3.6-flash"), patch.object(
+            generator, "FALLBACK_MODEL_NAME", "gemini-3.8-flash"
+        ), patch.object(generator.time, "sleep", side_effect=delays.append):
+            result = generator._generate_json("prompt")
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(requested_models, ["gemini-3.6-flash"] * 4 + ["gemini-3.8-flash"])
+        self.assertEqual(delays, [5, 10, 20])
