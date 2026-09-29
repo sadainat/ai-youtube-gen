@@ -72,10 +72,38 @@ class TestGeneratorRetry(unittest.TestCase):
             "_model",
             side_effect=lambda: SimpleNamespace(models=SimpleNamespace(generate_content=generate_content)),
         ), patch.object(generator, "MODEL_NAME", "gemini-3.6-flash"), patch.object(
-            generator, "FALLBACK_MODEL_NAME", "gemini-3.8-flash"
+            generator, "FALLBACK_MODEL_NAMES", ("gemini-3.8-flash", "gemini-3.5-flash")
         ), patch.object(generator.time, "sleep", side_effect=delays.append):
             result = generator._generate_json("prompt")
 
         self.assertEqual(result, {"ok": True})
         self.assertEqual(requested_models, ["gemini-3.6-flash"] * 4 + ["gemini-3.8-flash"])
         self.assertEqual(delays, [5, 10, 20])
+
+    def test_generate_json_tries_next_fallback_after_another_model_is_unavailable(self):
+        primary = FakeModels([APIError(503, {"error": {"message": "busy"}})] * 4)
+        first_fallback = FakeModels([APIError(503, {"error": {"message": "busy"}})] * 4)
+        requested_models = []
+
+        def generate_content(model, **kwargs):
+            requested_models.append(model)
+            if model == "gemini-3.6-flash":
+                return primary.generate_content(**kwargs)
+            if model == "gemini-3.8-flash":
+                return first_fallback.generate_content(**kwargs)
+            return SimpleNamespace(text='{"ok": true}')
+
+        with patch.object(
+            generator,
+            "_model",
+            return_value=SimpleNamespace(models=SimpleNamespace(generate_content=generate_content)),
+        ), patch.object(generator, "MODEL_NAME", "gemini-3.6-flash"), patch.object(
+            generator, "FALLBACK_MODEL_NAMES", ("gemini-3.8-flash", "gemini-3.5-flash")
+        ), patch.object(generator.time, "sleep"):
+            result = generator._generate_json("prompt")
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(
+            requested_models,
+            ["gemini-3.6-flash"] * 4 + ["gemini-3.8-flash"] * 4 + ["gemini-3.5-flash"],
+        )

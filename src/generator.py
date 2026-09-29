@@ -35,7 +35,13 @@ FONT_FILE = ASSETS_PATH / "fonts" / "arial.ttf"
 BACKGROUND_MUSIC_PATH = ASSETS_PATH / "music" / "bg_music.mp3"
 YOUR_NAME = "SARD"
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip() or "gemini-3.6-flash"
-FALLBACK_MODEL_NAME = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash"
+FALLBACK_MODEL_NAMES = tuple(
+    model_name.strip()
+    for model_name in os.getenv(
+        "GEMINI_FALLBACK_MODELS", "gemini-3.8-flash,gemini-3.5-flash"
+    ).split(",")
+    if model_name.strip()
+)
 ARABIC_VOICE = os.getenv("ARABIC_VOICE", "ar-SA-HamedNeural").strip() or "ar-SA-HamedNeural"
 ARABIC_VOICES = [
     "ar-SA-HamedNeural",
@@ -90,7 +96,7 @@ def _generate_content(prompt, model_name):
 
 
 def _generate_json(prompt):
-    model_names = list(dict.fromkeys((MODEL_NAME, FALLBACK_MODEL_NAME)))
+    model_names = list(dict.fromkeys((MODEL_NAME, *FALLBACK_MODEL_NAMES)))
     for index, model_name in enumerate(model_names):
         try:
             response = _generate_content(prompt, model_name)
