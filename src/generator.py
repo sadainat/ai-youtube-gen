@@ -4,6 +4,7 @@ import os
 import random
 import shutil
 import subprocess
+import time
 from io import BytesIO
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import arabic_reshaper
 import edge_tts
 import requests
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 from bidi.algorithm import get_display
 from gtts import gTTS
@@ -46,6 +48,8 @@ ENGLISH_VOICES = [
     "en-AU-NatashaNeural",
 ]
 _GEMINI_CLIENT = None
+_GEMINI_MAX_ATTEMPTS = 4
+_GEMINI_RETRYABLE_STATUS_CODES = {500, 502, 503, 504}
 
 if os.name == "posix" and Path("/usr/bin/convert").exists():
     change_settings({"IMAGEMAGICK_BINARY": "/usr/bin/convert"})
@@ -66,11 +70,23 @@ def _model():
 
 
 def _generate_json(prompt):
-    response = _model().models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-        config=types.GenerateContentConfig(response_mime_type="application/json"),
-    )
+    for attempt in range(1, _GEMINI_MAX_ATTEMPTS + 1):
+        try:
+            response = _model().models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt,
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+            break
+        except genai_errors.APIError as error:
+            if error.code not in _GEMINI_RETRYABLE_STATUS_CODES or attempt == _GEMINI_MAX_ATTEMPTS:
+                raise
+            delay = min(30, 5 * (2 ** (attempt - 1)))
+            print(
+                f"⚠️ Gemini API returned HTTP {error.code}; "
+                f"retrying in {delay}s (attempt {attempt + 1}/{_GEMINI_MAX_ATTEMPTS})."
+            )
+            time.sleep(delay)
     text = (response.text or "").strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
