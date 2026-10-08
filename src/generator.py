@@ -95,12 +95,42 @@ def _generate_content(prompt, model_name):
             time.sleep(delay)
 
 
+def _extract_json(text):
+    """Try multiple strategies to extract a valid JSON object or array from text."""
+    text = (text or "").strip()
+
+    # 1. Strip markdown code fences (```json ... ``` or ``` ... ```)
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+    # 2. Try the cleaned text as-is
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # 3. Try to find the outermost JSON object/array by scanning for { or [
+    for start_char, end_char in (("{", "}"), ("[", "]")):
+        start = text.find(start_char)
+        if start == -1:
+            continue
+        end = text.rfind(end_char)
+        if end != -1 and end > start:
+            candidate = text[start:end + 1]
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                pass
+
+    raise json.JSONDecodeError("No valid JSON found in response", text, 0)
+
+
 def _generate_json(prompt):
     model_names = list(dict.fromkeys((MODEL_NAME, *FALLBACK_MODEL_NAMES)))
+    last_error = None
     for index, model_name in enumerate(model_names):
         try:
             response = _generate_content(prompt, model_name)
-            break
         except genai_errors.APIError as error:
             if error.code not in _GEMINI_RETRYABLE_STATUS_CODES or index == len(model_names) - 1:
                 raise
@@ -108,13 +138,19 @@ def _generate_json(prompt):
                 f"⚠️ Gemini model {model_name} remained unavailable after "
                 f"{_GEMINI_MAX_ATTEMPTS} attempts; switching to {model_names[index + 1]}."
             )
-    text = (response.text or "").strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as error:
-        raise ValueError("Gemini returned invalid JSON.") from error
+            continue
+
+        try:
+            return _extract_json(response.text)
+        except json.JSONDecodeError as error:
+            last_error = error
+            if index < len(model_names) - 1:
+                print(
+                    f"⚠️ Gemini model {model_name} returned invalid JSON; "
+                    f"switching to {model_names[index + 1]}."
+                )
+
+    raise ValueError("Gemini returned invalid JSON after all models were tried.") from last_error
 
 
 CATEGORIES = [
